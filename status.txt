@@ -1,1 +1,1 @@
-https://vulkan-tutorial.com/en/Loading_models
+https://vulkan-tutorial.com/en/Generating_Mipmaps
