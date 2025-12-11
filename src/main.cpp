@@ -10,6 +10,7 @@
 #include <optional>
 #include <set>
 #include <stdexcept>
+#include <string>
 #include <vector>
 #include <array>
 #include <chrono>
@@ -42,8 +43,7 @@ const uint32_t HEIGHT = 800;
 const std::string MODEL_PATH = "assets/viking_room/viking_room.obj";
 const std::string TEXTURE_PATH = "assets/viking_room/viking_room.png";
 
-const std::vector<const char *> validationLayers = {
-    "VK_LAYER_KHRONOS_validation"};
+const std::vector<const char *> validationLayers = { "VK_LAYER_KHRONOS_validation" };
 
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
@@ -51,7 +51,9 @@ const bool enableValidationLayers = false;
 const bool enableValidationLayers = true;
 #endif
 
-const std::vector<const char *> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+const std::vector<const char *> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME };
+
+const std::vector<const char *> instanceExtensions = { VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME };
 
 static std::vector<char> readFile(const std::string& filename) {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
@@ -335,38 +337,33 @@ class HelloTriangleApplication {
         createInfo.pApplicationInfo = &appInfo;
 
         // Adding glfw required extensions
-        auto extensions = getRequiredExtensions();
-
-        if (!checkForGlfwExtensionsSupport(extensions.data(),
-                                           extensions.size())) {
-            throw std::runtime_error(
-                "glfw extensions requested, but not available by vulkan!");
+        std::vector<const char *> extensions = getRequiredVkInstanceExtensions();
+  
+        if (!checkForVkInstanceExtensionsSupport(extensions)) {
+            throw std::runtime_error("vk instance extensions requested, but not found!");
         }
-        createInfo.enabledExtensionCount =
-            static_cast<uint32_t>(extensions.size());
+        createInfo.enabledExtensionCount = extensions.size();
         createInfo.ppEnabledExtensionNames = extensions.data();
 
         // Checking validation layers for debug
         createInfo.enabledLayerCount = 0;
         if (enableValidationLayers && !checkValidationLayerSupport()) {
-            throw std::runtime_error(
-                "validation layers requested, but not available!");
+            throw std::runtime_error("validation layers requested, but not available!");
         }
 
         // Adding validation layers for debug
         VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
         if (enableValidationLayers) {
-            createInfo.enabledLayerCount =
-                static_cast<uint32_t>(validationLayers.size());
+            createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
             createInfo.ppEnabledLayerNames = validationLayers.data();
 
             populateDebugMessengerCreateInfo(debugCreateInfo);
-            createInfo.pNext =
-                (VkDebugUtilsMessengerCreateInfoEXT *)&debugCreateInfo;
+            createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debugCreateInfo;
+
         } else {
             createInfo.enabledLayerCount = 0;
-
             createInfo.pNext = nullptr;
+
         }
 
         // Creating the instance
@@ -375,13 +372,14 @@ class HelloTriangleApplication {
         }
     }
 
-    std::vector<const char *> getRequiredExtensions() {
+    std::vector<const char*> getRequiredVkInstanceExtensions() {
         uint32_t glfwExtensionCount = 0;
         const char **glfwExtensions;
         glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-        std::vector<const char *> extensions(
-            glfwExtensions, glfwExtensions + glfwExtensionCount);
+        std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+
+        extensions.insert(extensions.end(), instanceExtensions.begin(), instanceExtensions.end());
 
         if (enableValidationLayers) {
             extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -390,26 +388,25 @@ class HelloTriangleApplication {
         return extensions;
     }
 
-    bool checkForGlfwExtensionsSupport(const char **glfwExtensions, uint32_t glfwExtensionCount) {
+    bool checkForVkInstanceExtensionsSupport(std::vector<const char *>instanceExtensions) {
         // Checking for Vulkan available extensions
         uint32_t extensionCount = 0;
-        vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount,
-                                               nullptr);
+        vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
         std::vector<VkExtensionProperties> extensions(extensionCount);
-        vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount,
-                                               extensions.data());
+        vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
 
-        for (int i = 0; i < glfwExtensionCount; i++) {
+        for (const auto &requiredExtension: instanceExtensions) {
             bool extensionFound = false;
 
             for (const auto &extension : extensions) {
-                if (strcmp(extension.extensionName, glfwExtensions[i]) == 0) {
+                if (strcmp(extension.extensionName, requiredExtension) == 0) {
                     extensionFound = true;
                     break;
                 }
             }
 
             if (!extensionFound) {
+                throw std::runtime_error("vulkan extension not found - name: " + (std::string)requiredExtension);
                 return false;
             }
         }
@@ -435,6 +432,7 @@ class HelloTriangleApplication {
             }
 
             if (!layerFound) {
+                throw std::runtime_error("layer not found -> " + (std::string)layerName);
                 return false;
             }
         }
