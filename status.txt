@@ -1,1 +1,0 @@
-https://vulkan-tutorial.com/en/Compute_Shader

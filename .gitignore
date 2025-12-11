@@ -21,11 +21,6 @@ CTestTestfile.cmake
 _deps
 CMakeUserPresets.json
 
-
-*.sln
-*.vcxproj
-*.vcxproj.filters
-
 # Visual Studio .gitignore from GitHub
 
 ## Ignore Visual Studio temporary files, build results, and

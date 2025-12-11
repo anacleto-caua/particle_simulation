@@ -1,28 +1,27 @@
-# CMakeLists.txt for learning project
+cmake_minimum_required(VERSION 4.0...4.2)
+project(particles)
 
-cmake_minimum_required(VERSION 3.10)
-project(learning LANGUAGES CXX)
-
-# This makes IDEs/tools capable of correcting my code
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# Find all .cpp files in the 'src' directory
-file(GLOB_RECURSE SOURCES "src/*.cpp")
+file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp")
 
-# Define the executable target
-add_executable(${PROJECT_NAME} ${SOURCES})
+add_executable(${PROJECT_NAME} ${SOURCE_FILES} ${HEADER_FILES})
 
-# Link libraries
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    glfw
-    vulkan
-)
+find_package(Vulkan REQUIRED)
+find_package(glfw3 REQUIRED)
 
-# Link Linux-specific libraries
-if (UNIX) # True on Linux and macOS, false on Windows
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE 
+        gdi32 
+        user32 
+        shell32
+    )
+endif()
+
+if(UNIX)
     target_link_libraries(${PROJECT_NAME} PRIVATE
         dl
         pthread
@@ -33,21 +32,41 @@ if (UNIX) # True on Linux and macOS, false on Windows
     )
 endif()
 
-# Set output directories for built artifacts
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+# Setup header only Libraries
+target_include_directories(${PROJECT_NAME} PRIVATE 
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    "${CMAKE_CURRENT_SOURCE_DIR}/libs/glm-1.0.2"
+    "${CMAKE_CURRENT_SOURCE_DIR}/libs/stb_image"
+    "${CMAKE_CURRENT_SOURCE_DIR}/libs/tinyobjloader"
+)
 
-# Conditionally rename the target for release builds
-if (CMAKE_BUILD_TYPE STREQUAL "Release")
-    set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${PROJECT_NAME}_release)
-endif()
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    glfw
+    Vulkan::Vulkan
+)
 
-# Custom target to run the executable
-# This target depends on the main executable, ensuring it's built before running.
-add_custom_target(run
-    COMMAND $<TARGET_FILE:${PROJECT_NAME}>
-    WORKING_DIRECTORY "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-    DEPENDS ${PROJECT_NAME}
-    COMMENT "Runs the built executable."
+# Output directories for easily finding assets
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+# Copy assets, textures and shaders to the build directory
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>/textures
+
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders"
+    
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets"
+
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/textures"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/textures"
+
+    COMMENT "Copying assets, textures, and shaders to output directory..."
 )

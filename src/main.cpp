@@ -51,13 +51,13 @@ const bool enableValidationLayers = false;
 const bool enableValidationLayers = true;
 #endif
 
-const std::vector<const char *> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+const std::vector<const char *> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
 static std::vector<char> readFile(const std::string& filename) {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
     if (!file.is_open()) {
-        throw std::runtime_error("failed to open file!");
+        throw std::runtime_error("failed to open file! " + filename);
     }
 
     size_t fileSize = (size_t)file.tellg();
@@ -599,13 +599,16 @@ class HelloTriangleApplication {
                 indices.presentFamily = i;
             }
 
-            if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
-                !(indices.graphicsFamily.has_value())
+            // Picks a queue family with both graphics and compute capabilities
+            if (!(indices.graphicsFamily.has_value()) &&
+                (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
+                (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
                 ) {
                 indices.graphicsFamily = i;
             }
 
-            if ((queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) &&
+            if (!(indices.transferFamily.has_value()) &&
+                (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) &&
                 !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
                 !(queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
                 ) {
@@ -623,14 +626,19 @@ class HelloTriangleApplication {
         // loops from back to front as trying not to pick the same queues for present and graphics
         if (!indices.transferFamily.has_value()) {
             for (i = queueFamilies.size() - 1; i >= 0; i--) {
-                auto queueFamily = queueFamilies.at(i);
+                auto& queueFamily = queueFamilies.at(i);
 
                 if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) ||
                     (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
                     ) {
                     indices.transferFamily = i;
+                    break;
                 }
             }
+        }
+
+        if (!indices.isComplete()) {
+            throw std::runtime_error("couldn't find the necessary queue families");
         }
 
         return indices;
