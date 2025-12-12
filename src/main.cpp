@@ -1,4 +1,4 @@
-#include "App/ParticleSimulation.cpp"
+#include "Core/ParticleSimulation.cpp"
 
 int main() {
     ParticleSimulation app;
