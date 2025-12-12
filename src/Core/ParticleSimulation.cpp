@@ -74,14 +74,6 @@ class ParticleSimulation {
     VkInstance instance;
 
     VkDebugUtilsMessengerEXT debugMessenger;
-    
-    // VkPhysicalDevice m_device->getPhysicalDevice() = VK_NULL_HANDLE;
-    // VkDevice m_device->getLogicalDevice();
-     // The logical m_device->getLogicalDevice() that will interface with the physical m_device->getLogicalDevice()
-
-    // VkQueue m_device->getGraphicsQueue();
-    // VkQueue m_device->getPresentQueue();
-    // VkQueue m_device->getTransferQueue();
 
     VkSurfaceKHR surface;
 
@@ -131,8 +123,6 @@ class ParticleSimulation {
     VkDescriptorPool descriptorPool;
     std::vector<VkDescriptorSet> descriptorSets;
 
-    // QueueFamilyIndices m_device->getQueueFamilyIndices();
-
     VkCommandPool commandPoolGraphics;
     VkCommandPool commandPoolTransfer;
     std::vector<VkCommandBuffer> commandBuffers;
@@ -165,8 +155,6 @@ class ParticleSimulation {
         createInstance();
         setupDebugMessenger();
         createSurface();
-        // pickPhysicalDevice(); // Doesn't need to be destroyed since it will be destroyed with the VkInstance
-        // createLogicalDevice();
 
         m_device = std::make_unique<DeviceContext>(instance, surface, deviceExtensions, enableValidationLayers, validationLayers);
 
@@ -230,7 +218,6 @@ class ParticleSimulation {
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
         vkDestroyRenderPass(device, renderPass, nullptr);
 
-        // vkDestroyDevice(device, nullptr);
         m_device.reset();
         vkDestroySurfaceKHR(instance, surface, nullptr);
 
