@@ -5,8 +5,6 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
-#include <map>
-#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -21,8 +19,8 @@
 #include <stb_image.h>
 #include <tiny_obj_loader.h>
 
-#include "Types/AppTypes.hpp"
 #include "Types/Vertex.hpp"
+#include "DeviceContext.hpp"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -32,7 +30,7 @@ const uint32_t HEIGHT = 800;
 const std::string MODEL_PATH = "assets/viking_room/viking_room.obj";
 const std::string TEXTURE_PATH = "assets/viking_room/viking_room.png";
 
-const std::vector<const char *> validationLayers = { "VK_LAYER_KHRONOS_validation" };
+const std::vector<const char *> validationLayers = { "VK_LAYER_KHRONOS_validation" }; 
 
 #ifdef NDEBUG
     const bool enableValidationLayers = false;
@@ -77,15 +75,13 @@ class ParticleSimulation {
 
     VkDebugUtilsMessengerEXT debugMessenger;
     
-    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-    VkDevice device; // The logical device that will interface with the physical device
+    // VkPhysicalDevice m_device->getPhysicalDevice() = VK_NULL_HANDLE;
+    // VkDevice m_device->getLogicalDevice();
+     // The logical m_device->getLogicalDevice() that will interface with the physical m_device->getLogicalDevice()
 
-    // They are being handled as two separate queues but may end up being the
-    // same(depends on device) Using the same queue for both may improve
-    // performance(not explicitly implemented)
-    VkQueue graphicsQueue;
-    VkQueue presentQueue;
-    VkQueue transferQueue;
+    // VkQueue m_device->getGraphicsQueue();
+    // VkQueue m_device->getPresentQueue();
+    // VkQueue m_device->getTransferQueue();
 
     VkSurfaceKHR surface;
 
@@ -135,7 +131,8 @@ class ParticleSimulation {
     VkDescriptorPool descriptorPool;
     std::vector<VkDescriptorSet> descriptorSets;
 
-    QueueFamilyIndices queueIndices;
+    // QueueFamilyIndices m_device->getQueueFamilyIndices();
+
     VkCommandPool commandPoolGraphics;
     VkCommandPool commandPoolTransfer;
     std::vector<VkCommandBuffer> commandBuffers;
@@ -145,6 +142,8 @@ class ParticleSimulation {
     std::vector <VkFence> inFlightFences;
 
     uint32_t currentFrame = 0;
+
+    std::unique_ptr<DeviceContext> m_device;
 
     void initWindow() {
         glfwInit();
@@ -166,8 +165,14 @@ class ParticleSimulation {
         createInstance();
         setupDebugMessenger();
         createSurface();
-        pickPhysicalDevice(); // Doesn't need to be destroyed since it will be destroyed with the VkInstance
-        createLogicalDevice();
+        // pickPhysicalDevice(); // Doesn't need to be destroyed since it will be destroyed with the VkInstance
+        // createLogicalDevice();
+
+        m_device = std::make_unique<DeviceContext>(instance, surface, deviceExtensions, enableValidationLayers, validationLayers);
+
+        // TODO: FOR NOW
+        msaaSamples = getMaxUsableSampleCount();
+
         createSwapChain();
         createImageViews();
         createRenderPass();
@@ -191,6 +196,8 @@ class ParticleSimulation {
     }
 
     void cleanup() {
+
+        VkDevice device = m_device->getLogicalDevice();
 
         cleanupSwapChain();
 
@@ -223,7 +230,8 @@ class ParticleSimulation {
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
         vkDestroyRenderPass(device, renderPass, nullptr);
 
-        vkDestroyDevice(device, nullptr);
+        // vkDestroyDevice(device, nullptr);
+        m_device.reset();
         vkDestroySurfaceKHR(instance, surface, nullptr);
 
         if (enableValidationLayers) {
@@ -411,66 +419,10 @@ class ParticleSimulation {
             throw std::runtime_error("failed to create window surface!");
         }
     }
-    
-    void pickPhysicalDevice() {
-        uint32_t deviceCount = 0;
-        vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
-
-        if (deviceCount == 0) {
-            throw std::runtime_error(
-                "failed to find GPUs with Vulkan support!");
-        }
-
-        std::vector<VkPhysicalDevice> devices(deviceCount);
-        vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
-
-        // Make a list of every suitable device and picks the best one
-        std::multimap<int, VkPhysicalDevice> candidates;
-
-        for (const auto &device : devices) {
-            if (!isDeviceSuitable(device)) {
-                break;
-            }
-            int score = rateDeviceSuitability(device);
-            candidates.insert(std::make_pair(score, device));
-        }
-
-        // Check for the best most suitable candidate
-        if (candidates.rbegin()->first > 0) {
-            physicalDevice = candidates.rbegin()->second;
-        } else {
-            throw std::runtime_error("failed to find a suitable GPU!");
-        }
-
-        if (physicalDevice == VK_NULL_HANDLE) {
-            throw std::runtime_error("failed to find a suitable GPU!");
-        }
-
-        // Chosen device
-        VkPhysicalDeviceProperties deviceProperties;
-        vkGetPhysicalDeviceProperties(
-            physicalDevice,
-            &deviceProperties); // Looking for device data a second
-        // time, just doesn't look good
-
-        std::cout << "Chosen Device Properties: " << std::endl;
-        std::cout << "Device ID: " << deviceProperties.deviceID << std::endl;
-        std::cout << "Device Type: " << deviceProperties.deviceType
-                  << std::endl;
-        std::cout << "Device Name: " << deviceProperties.deviceName
-                  << std::endl;
-        std::cout << "Device Driver Version: " << deviceProperties.driverVersion
-                  << std::endl;
-        std::cout << "Device Api Version: " << deviceProperties.apiVersion
-                  << std::endl;
-        
-        // This does feels out of place
-        msaaSamples = getMaxUsableSampleCount();
-    }
 
     VkSampleCountFlagBits getMaxUsableSampleCount() {
         VkPhysicalDeviceProperties physicalDeviceProperties;
-        vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
+        vkGetPhysicalDeviceProperties(m_device->getPhysicalDevice(), &physicalDeviceProperties);
 
         VkSampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts;
         if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
@@ -483,239 +435,8 @@ class ParticleSimulation {
         return VK_SAMPLE_COUNT_1_BIT;
     }
 
-    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
-        QueueFamilyIndices indices;
-
-        uint32_t queueFamilyCount = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
-            nullptr);
-
-        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
-            queueFamilies.data());
-
-        int i = 0;
-        VkBool32 presentSupport = false;
-        for (const auto& queueFamily : queueFamilies) {
-
-            // Does the queue support surface presentation
-            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
-            // If the queue is suitable for surface presentation
-            if ((presentSupport) &&
-                !(indices.presentFamily.has_value())
-                ) {
-                indices.presentFamily = i;
-            }
-
-            // Picks a queue family with both graphics and compute capabilities
-            if (!(indices.graphicsFamily.has_value()) &&
-                (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
-                (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
-                ) {
-                indices.graphicsFamily = i;
-            }
-
-            if (!(indices.transferFamily.has_value()) &&
-                (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) &&
-                !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
-                !(queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
-                ) {
-                indices.transferFamily = i;
-            }
-
-            if (indices.isComplete()) {
-                break;
-            }
-
-            i++;
-        }
-
-        // If no dedicated transfer family was found pick the next best thing 
-        // loops from back to front as trying not to pick the same queues for present and graphics
-        if (!indices.transferFamily.has_value()) {
-            for (i = queueFamilies.size() - 1; i >= 0; i--) {
-                auto& queueFamily = queueFamilies.at(i);
-
-                if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) ||
-                    (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
-                    ) {
-                    indices.transferFamily = i;
-                    break;
-                }
-            }
-        }
-
-        if (!indices.isComplete()) {
-            throw std::runtime_error("couldn't find the necessary queue families");
-        }
-
-        return indices;
-    }
-
-    // To add technologies specific for device
-    bool isDeviceSuitable(VkPhysicalDevice device) {
-        bool areIndicesEnough = findQueueFamilies(device).isComplete();
-
-        bool areExtensionsSupported = checkDeviceExtensionSupport(device);
-
-        bool isSwapChainAdequate = false;
-        if (areExtensionsSupported) {
-            SwapChainSupportDetails swapChainSupport =
-                querySwapChainSupport(device);
-            isSwapChainAdequate = !swapChainSupport.formats.empty() &&
-                                  !swapChainSupport.presentModes.empty();
-        }
-
-        VkPhysicalDeviceFeatures supportedFeatures;
-        vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
-
-        bool areFeaturesSupported = supportedFeatures.samplerAnisotropy;
-
-        return areIndicesEnough && areExtensionsSupported && isSwapChainAdequate && areFeaturesSupported;
-    }
-
-    bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
-        uint32_t extensionCount;
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
-
-        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount,availableExtensions.data());
-
-        std::set<std::string> requiredExtensions(deviceExtensions.begin(),deviceExtensions.end());
-
-        for(const auto &requiredExtension: requiredExtensions) {
-            bool isExtAvailable = false;
-            
-            for (const auto &availableExtension : availableExtensions) {
-                if(requiredExtension == availableExtension.extensionName) {
-                    isExtAvailable = true;
-                    break;
-                }
-            }
-
-            if(!isExtAvailable) {
-                throw std::runtime_error("device extension required but not found: -> " + requiredExtension);
-            }
-        }
-
-        return true;
-    }
-
-    SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device) {
-        SwapChainSupportDetails details;
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
-
-        uint32_t formatCount;
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
-
-        if (formatCount != 0) {
-            details.formats.resize(formatCount);
-            vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
-        }
-
-        uint32_t presentModeCount;
-        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
-
-        if (presentModeCount != 0) {
-            details.presentModes.resize(presentModeCount);
-            vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());
-        }
-
-        return details;
-    }
-
-    // Pick the most suitable device
-    int rateDeviceSuitability(VkPhysicalDevice device) {
-        VkPhysicalDeviceProperties deviceProperties;
-        VkPhysicalDeviceFeatures deviceFeatures;
-        vkGetPhysicalDeviceProperties(device, &deviceProperties);
-        vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-
-        int score = 0;
-
-        // Discrete GPUs have a significant performance advantage
-        if (deviceProperties.deviceType ==
-            VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-            score += 1000;
-        }
-
-        // Maximum possible size of textures affects graphics quality
-        score += deviceProperties.limits.maxImageDimension2D;
-
-        // Application can't function without geometry shaders
-        // Should this be on isDeviceSuitable? Maybe
-        // Is there even a point on having those 2 functions?
-        if (!deviceFeatures.geometryShader) {
-            return 0;
-        }
-
-        return score;
-    }
-
-    void createLogicalDevice() {
-        // Saves the queue indices to the global variable
-        queueIndices = findQueueFamilies(physicalDevice);
-
-        std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-        std::set<uint32_t> uniqueQueueFamilies = {
-            queueIndices.graphicsFamily.value(),
-            queueIndices.presentFamily.value(),
-            queueIndices.transferFamily.value()
-        };
-
-        float queuePriority = 1.0f;
-        for (uint32_t queueFamily : uniqueQueueFamilies) {
-            VkDeviceQueueCreateInfo queueCreateInfo{};
-            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queueCreateInfo.queueFamilyIndex = queueFamily;
-            queueCreateInfo.queueCount = 1;
-            queueCreateInfo.pQueuePriorities = &queuePriority;
-            queueCreateInfos.push_back(queueCreateInfo);
-        }
-
-        // Device specific features we wanna use
-        VkPhysicalDeviceFeatures deviceFeatures{};
-        deviceFeatures.samplerAnisotropy = VK_TRUE;
-        deviceFeatures.sampleRateShading = VK_TRUE; // Enable sample shading feature for the device
-        
-        VkDeviceCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        createInfo.pEnabledFeatures = &deviceFeatures;
-        createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-        createInfo.pQueueCreateInfos = queueCreateInfos.data();
-        createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
-        createInfo.ppEnabledExtensionNames = deviceExtensions.data();
-        
-        // Enable sychronization2 features
-        VkPhysicalDeviceSynchronization2Features sync2Features = {};
-        sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
-        sync2Features.synchronization2 = VK_TRUE;
-        
-        createInfo.pNext = &sync2Features;
-
-        if (enableValidationLayers) {
-            // Both parameters are not used anymore but it's recommended to set
-            // for backwards compatibility
-            createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-            createInfo.ppEnabledLayerNames = validationLayers.data();
-        } else {
-            createInfo.enabledLayerCount = 0;
-        }
-
-        if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) !=
-            VK_SUCCESS) {
-            throw std::runtime_error("failed to create logical device!");
-        }
-
-        // Get the queue
-        // Since it's using just one device queue the index is 0
-        vkGetDeviceQueue(device, queueIndices.graphicsFamily.value(), 0, &graphicsQueue);
-        vkGetDeviceQueue(device, queueIndices.presentFamily.value(), 0, &presentQueue);
-        vkGetDeviceQueue(device, queueIndices.transferFamily.value(), 0, &transferQueue);
-    }
-
     void createSwapChain() {
-        SwapChainSupportDetails swapChainSupport = querySwapChainSupport(physicalDevice);
+        SwapChainSupportDetails swapChainSupport = m_device->querySwapChainSupport(surface);
 
         VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
         VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
@@ -752,9 +473,9 @@ class ParticleSimulation {
         swapChainImageFormat = surfaceFormat.format;
         swapChainExtent = extent;
 
-        uint32_t queueFamilyIndices[] = {queueIndices.graphicsFamily.value(), queueIndices.presentFamily.value()};
+        uint32_t queueFamilyIndices[] = {m_device->getQueueFamilyIndices().graphicsFamily.value(), m_device->getQueueFamilyIndices().presentFamily.value()};
 
-        if (queueIndices.graphicsFamily != queueIndices.presentFamily) {
+        if (m_device->getQueueFamilyIndices().graphicsFamily != m_device->getQueueFamilyIndices().presentFamily) {
             /**
              * In -VK_SHARING_MODE_CONCURRENT-
              * Images can be used across multiple queue families
@@ -785,13 +506,15 @@ class ParticleSimulation {
         createInfo.clipped = VK_TRUE; // This means we do not care about pixels being obfuscated
         createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-        if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) != VK_SUCCESS) {
+        VkDevice tmp_device = m_device->getLogicalDevice();
+
+        if (vkCreateSwapchainKHR(tmp_device, &createInfo, nullptr, &swapChain) != VK_SUCCESS) {
             throw std::runtime_error("failed to create swap chain!");
         }
 
-        vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
+        vkGetSwapchainImagesKHR(tmp_device, swapChain, &imageCount, nullptr);
         swapChainImages.resize(imageCount);
-        vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
+        vkGetSwapchainImagesKHR(tmp_device, swapChain, &imageCount, swapChainImages.data());
     }
 
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats) {
@@ -838,6 +561,8 @@ class ParticleSimulation {
 
     void cleanupSwapChain() {
 
+        VkDevice device = m_device->getLogicalDevice();
+
         vkDestroyImageView(device, colorImageView, nullptr);
         vkDestroyImage(device, colorImage, nullptr);
         vkFreeMemory(device, colorImageMemory, nullptr);
@@ -880,7 +605,7 @@ class ParticleSimulation {
         }
 
         // We shouldn't touch resources that may still be in use.
-        vkDeviceWaitIdle(device);
+        vkDeviceWaitIdle(m_device->getLogicalDevice());
 
         cleanupSwapChain();
 
@@ -984,7 +709,7 @@ class ParticleSimulation {
         renderPassInfo.dependencyCount = 1;
         renderPassInfo.pDependencies = &dependency;
 
-        if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
+        if (vkCreateRenderPass(m_device->getLogicalDevice(), &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
             throw std::runtime_error("failed to create render pass!");
         }
     }
@@ -1010,7 +735,7 @@ class ParticleSimulation {
         layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
         layoutInfo.pBindings = bindings.data();
 
-        if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+        if (vkCreateDescriptorSetLayout(m_device->getLogicalDevice(), &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create a descriptor set layout!");
         }
     }
@@ -1151,7 +876,7 @@ class ParticleSimulation {
         pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
         pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
-        if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+        if (vkCreatePipelineLayout(m_device->getLogicalDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create pipeline layout!");
         }
 
@@ -1161,11 +886,11 @@ class ParticleSimulation {
         depthStencil.depthWriteEnable = VK_TRUE;
         depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
         depthStencil.depthBoundsTestEnable = VK_FALSE;
-        depthStencil.minDepthBounds = 0.0f; // Optional
-        depthStencil.maxDepthBounds = 1.0f; // Optional
+        depthStencil.minDepthBounds = 0.0f;
+        depthStencil.maxDepthBounds = 1.0f;
         depthStencil.stencilTestEnable = VK_FALSE;
-        depthStencil.front = {}; // Optional
-        depthStencil.back = {}; // Optional
+        depthStencil.front = {};
+        depthStencil.back = {};
 
         VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -1182,15 +907,15 @@ class ParticleSimulation {
         pipelineInfo.layout = pipelineLayout;
         pipelineInfo.renderPass = renderPass;
         pipelineInfo.subpass = 0;
-        pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
-        pipelineInfo.basePipelineIndex = -1; // Optional
+        pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+        pipelineInfo.basePipelineIndex = -1;
 
-        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
+        if (vkCreateGraphicsPipelines(m_device->getLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
             throw std::runtime_error("failed to create graphics pipeline!");
         }
 
-        vkDestroyShaderModule(device, fragShaderModule, nullptr);
-        vkDestroyShaderModule(device, vertShaderModule, nullptr);
+        vkDestroyShaderModule(m_device->getLogicalDevice(), fragShaderModule, nullptr);
+        vkDestroyShaderModule(m_device->getLogicalDevice(), vertShaderModule, nullptr);
     }
 
     VkShaderModule createShaderModule(const std::vector<char>& code) {
@@ -1200,7 +925,7 @@ class ParticleSimulation {
         createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
         VkShaderModule shaderModule;
-        if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+        if (vkCreateShaderModule(m_device->getLogicalDevice(), &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
             throw std::runtime_error("failed to create shader module!");
         }
 
@@ -1227,7 +952,7 @@ class ParticleSimulation {
             framebufferInfo.height = swapChainExtent.height;
             framebufferInfo.layers = 1;
 
-            if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
+            if (vkCreateFramebuffer(m_device->getLogicalDevice(), &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
                 throw std::runtime_error("failed to create framebuffer!");
             }
         }
@@ -1238,18 +963,18 @@ class ParticleSimulation {
         VkCommandPoolCreateInfo poolInfoGraphics{};
         poolInfoGraphics.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         poolInfoGraphics.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        poolInfoGraphics.queueFamilyIndex = queueIndices.graphicsFamily.value();
+        poolInfoGraphics.queueFamilyIndex = m_device->getQueueFamilyIndices().graphicsFamily.value();
 
-        if (vkCreateCommandPool(device, &poolInfoGraphics, nullptr, &commandPoolGraphics) != VK_SUCCESS) {
+        if (vkCreateCommandPool(m_device->getLogicalDevice(), &poolInfoGraphics, nullptr, &commandPoolGraphics) != VK_SUCCESS) {
             throw std::runtime_error("failed to create graphics command pool!");
         }
 
         VkCommandPoolCreateInfo poolInfoTransfer{};
         poolInfoTransfer.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         poolInfoTransfer.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        poolInfoTransfer.queueFamilyIndex = queueIndices.transferFamily.value();
+        poolInfoTransfer.queueFamilyIndex = m_device->getQueueFamilyIndices().transferFamily.value();
 
-        if (vkCreateCommandPool(device, &poolInfoTransfer, nullptr, &commandPoolTransfer) != VK_SUCCESS) {
+        if (vkCreateCommandPool(m_device->getLogicalDevice(), &poolInfoTransfer, nullptr, &commandPoolTransfer) != VK_SUCCESS) {
             throw std::runtime_error("failed to create transfer command pool!");
         }
     }
@@ -1281,7 +1006,7 @@ class ParticleSimulation {
         for (VkFormat format : candidates){
 
             VkFormatProperties props;
-            vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+            vkGetPhysicalDeviceFormatProperties(m_device->getPhysicalDevice(), format, &props);
 
             if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
                 return format;
@@ -1333,13 +1058,13 @@ class ParticleSimulation {
             stagingBufferMemory
         );
 
-        uint32_t transferFamily = queueIndices.transferFamily.value();
-        uint32_t graphicsFamily = queueIndices.graphicsFamily.value();
+        uint32_t transferFamily = m_device->getQueueFamilyIndices().transferFamily.value();
+        uint32_t graphicsFamily = m_device->getQueueFamilyIndices().graphicsFamily.value();
 
         void* data;
-        vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+        vkMapMemory(m_device->getLogicalDevice(), stagingBufferMemory, 0, imageSize, 0, &data);
         memcpy(data, pixels, static_cast<size_t>(imageSize));
-        vkUnmapMemory(device, stagingBufferMemory);
+        vkUnmapMemory(m_device->getLogicalDevice(), stagingBufferMemory);
 
         stbi_image_free(pixels);
 
@@ -1390,7 +1115,7 @@ class ParticleSimulation {
                 1, &barrier
             );
 
-            endSingleTimeCommands(transferCmd, transferQueue, commandPoolTransfer);
+            endSingleTimeCommands(transferCmd, m_device->getTransferQueue(), commandPoolTransfer);
         }
 
         copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
@@ -1432,7 +1157,7 @@ class ParticleSimulation {
                 1, &barrier
             );
 
-            endSingleTimeCommands(transferCmd, transferQueue, commandPoolTransfer);
+            endSingleTimeCommands(transferCmd, m_device->getTransferQueue(), commandPoolTransfer);
         }
 
         // PART B: Acquire on Graphics Queue
@@ -1472,13 +1197,13 @@ class ParticleSimulation {
                 1, &barrier
             );
 
-            endSingleTimeCommands(graphicsCmd, graphicsQueue, commandPoolGraphics);
+            endSingleTimeCommands(graphicsCmd, m_device->getGraphicsQueue(), commandPoolGraphics);
         }
 
         generateMipmaps(textureImage, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, mipLevels);
 
-        vkDestroyBuffer(device, stagingBuffer, nullptr);
-        vkFreeMemory(device, stagingBufferMemory, nullptr);
+        vkDestroyBuffer(m_device->getLogicalDevice(), stagingBuffer, nullptr);
+        vkFreeMemory(m_device->getLogicalDevice(), stagingBufferMemory, nullptr);
     }
 
     void createTextureImageView() {
@@ -1499,9 +1224,9 @@ class ParticleSimulation {
         
 
 
-        // Quering the device properties so we know what anisotropy we can use
+        // Quering the m_device->getLogicalDevice() properties so we know what anisotropy we can use
         VkPhysicalDeviceProperties properties{};
-        vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+        vkGetPhysicalDeviceProperties(m_device->getPhysicalDevice(), &properties);
 
         samplerInfo.anisotropyEnable = VK_TRUE;
         samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy; // Just uses the max since performance isn't a concern
@@ -1518,7 +1243,7 @@ class ParticleSimulation {
         samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
         samplerInfo.mipLodBias = 0.0f; // Optional
 
-        if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
+        if (vkCreateSampler(m_device->getLogicalDevice(), &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
             throw std::runtime_error("failed to create texture sampler!");
         }
     }
@@ -1536,7 +1261,7 @@ class ParticleSimulation {
         viewInfo.subresourceRange.layerCount = 1;
 
         VkImageView imageView;
-        if (vkCreateImageView(device, &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
+        if (vkCreateImageView(m_device->getLogicalDevice(), &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
             throw std::runtime_error("failed to create image view!");
         }
 
@@ -1570,23 +1295,23 @@ class ParticleSimulation {
         imageInfo.samples = numSamples;
         imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        if (vkCreateImage(device, &imageInfo, nullptr, &image) != VK_SUCCESS) {
+        if (vkCreateImage(m_device->getLogicalDevice(), &imageInfo, nullptr, &image) != VK_SUCCESS) {
             throw std::runtime_error("failed to create image!");
         }
 
         VkMemoryRequirements memRequirements;
-        vkGetImageMemoryRequirements(device, image, &memRequirements);
+        vkGetImageMemoryRequirements(m_device->getLogicalDevice(), image, &memRequirements);
 
         VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocInfo.allocationSize = memRequirements.size;
         allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
 
-        if (vkAllocateMemory(device, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
+        if (vkAllocateMemory(m_device->getLogicalDevice(), &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
             throw std::runtime_error("failed to allocate image memory!");
         }
 
-        vkBindImageMemory(device, image, imageMemory, 0);
+        vkBindImageMemory(m_device->getLogicalDevice(), image, imageMemory, 0);
     }
 
     void createColorResources() {
@@ -1617,7 +1342,7 @@ class ParticleSimulation {
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         allocInfo.commandBufferCount = commandBuffers.size();
 
-        if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
+        if (vkAllocateCommandBuffers(m_device->getLogicalDevice(), &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
             throw std::runtime_error("failed to allocate command buffers!");
         }
     }
@@ -1720,9 +1445,9 @@ class ParticleSimulation {
         fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // Create the fence in signaled state, so the first call of drawFrame() will occur
 
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
-                vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
-                vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
+            if (vkCreateSemaphore(m_device->getLogicalDevice(), &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
+                vkCreateSemaphore(m_device->getLogicalDevice(), &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
+                vkCreateFence(m_device->getLogicalDevice(), &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
                 throw std::runtime_error("failed to create semaphores!");
             }
         }
@@ -1737,7 +1462,7 @@ class ParticleSimulation {
         allocInfo.commandBufferCount = 1;
 
         VkCommandBuffer commandBuffer;
-        vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+        vkAllocateCommandBuffers(m_device->getLogicalDevice(), &allocInfo, &commandBuffer);
 
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1759,7 +1484,7 @@ class ParticleSimulation {
         vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
         vkQueueWaitIdle(queue);
 
-        vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+        vkFreeCommandBuffers(m_device->getLogicalDevice(), commandPool, 1, &commandBuffer);
     }
 
     void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
@@ -1831,7 +1556,7 @@ class ParticleSimulation {
             1, &barrier
         );
 
-        endSingleTimeCommands(commandBuffer, graphicsQueue, commandPoolGraphics);
+        endSingleTimeCommands(commandBuffer, m_device->getGraphicsQueue(), commandPoolGraphics);
     }
 
     // Overload for ownership transfer
@@ -1869,14 +1594,14 @@ class ParticleSimulation {
         VkPipelineStageFlags destinationStage;
 
         // IF this is the RELEASE operation (Transfer Queue)
-        if (srcFamily != dstFamily && commandQueue == transferQueue) {
+        if (srcFamily != dstFamily && commandQueue == m_device->getTransferQueue()) {
             barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             barrier.dstAccessMask = 0;
             sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
             destinationStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
         }
         // IF this is the ACQUIRE operation (Graphics Queue)
-        else if (srcFamily != dstFamily && commandQueue == graphicsQueue) {
+        else if (srcFamily != dstFamily && commandQueue == m_device->getGraphicsQueue()) {
             barrier.srcAccessMask = 0;
             barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
             sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
@@ -1921,7 +1646,7 @@ class ParticleSimulation {
             &region
         );
 
-        endSingleTimeCommands(commandBuffer, transferQueue, commandPoolTransfer);
+        endSingleTimeCommands(commandBuffer, m_device->getTransferQueue(), commandPoolTransfer);
     }
 
     void createBuffer(
@@ -1938,12 +1663,12 @@ class ParticleSimulation {
         bufferInfo.usage = usage;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+        if (vkCreateBuffer(m_device->getLogicalDevice(), &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
             throw std::runtime_error("failed to create vertex buffer!");
         }
 
         VkMemoryRequirements memRequirements;
-        vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+        vkGetBufferMemoryRequirements(m_device->getLogicalDevice(), buffer, &memRequirements);
 
         VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -1953,11 +1678,11 @@ class ParticleSimulation {
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
             );
 
-        if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+        if (vkAllocateMemory(m_device->getLogicalDevice(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
             throw std::runtime_error("failed to allocate vertex buffer memory!");
         }
 
-        vkBindBufferMemory(device, buffer, bufferMemory, 0);
+        vkBindBufferMemory(m_device->getLogicalDevice(), buffer, bufferMemory, 0);
     }
 
     void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
@@ -1967,7 +1692,7 @@ class ParticleSimulation {
         copyRegion.size = size;
         vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
-        endSingleTimeCommands(commandBuffer, transferQueue, commandPoolTransfer);
+        endSingleTimeCommands(commandBuffer, m_device->getTransferQueue(), commandPoolTransfer);
     }
 
     void loadModel() {
@@ -2028,9 +1753,9 @@ class ParticleSimulation {
         );
 
         void* data;
-        vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+        vkMapMemory(m_device->getLogicalDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
         memcpy(data, vertices.data(), (size_t)bufferSize);
-        vkUnmapMemory(device, stagingBufferMemory);
+        vkUnmapMemory(m_device->getLogicalDevice(), stagingBufferMemory);
 
         createBuffer(bufferSize,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -2041,8 +1766,8 @@ class ParticleSimulation {
 
         copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
 
-        vkDestroyBuffer(device, stagingBuffer, nullptr);
-        vkFreeMemory(device, stagingBufferMemory, nullptr);
+        vkDestroyBuffer(m_device->getLogicalDevice(), stagingBuffer, nullptr);
+        vkFreeMemory(m_device->getLogicalDevice(), stagingBufferMemory, nullptr);
     }
 
     void createIndexBuffer() {
@@ -2059,9 +1784,9 @@ class ParticleSimulation {
         );
 
         void* data;
-        vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+        vkMapMemory(m_device->getLogicalDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
         memcpy(data, indices.data(), (size_t)bufferSize);
-        vkUnmapMemory(device, stagingBufferMemory);
+        vkUnmapMemory(m_device->getLogicalDevice(), stagingBufferMemory);
 
         createBuffer(bufferSize,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
@@ -2072,8 +1797,8 @@ class ParticleSimulation {
 
         copyBuffer(stagingBuffer, indexBuffer, bufferSize);
 
-        vkDestroyBuffer(device, stagingBuffer, nullptr);
-        vkFreeMemory(device, stagingBufferMemory, nullptr);
+        vkDestroyBuffer(m_device->getLogicalDevice(), stagingBuffer, nullptr);
+        vkFreeMemory(m_device->getLogicalDevice(), stagingBufferMemory, nullptr);
     }
 
     void createUniformBuffers() {
@@ -2086,7 +1811,7 @@ class ParticleSimulation {
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
 
-            vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
+            vkMapMemory(m_device->getLogicalDevice(), uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
         }
     }
 
@@ -2103,7 +1828,7 @@ class ParticleSimulation {
         poolInfo.pPoolSizes = poolSizes.data();
         poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
-        if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+        if (vkCreateDescriptorPool(m_device->getLogicalDevice(), &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
             throw std::runtime_error("failed to create descriptor pool!");
         }
     }
@@ -2118,7 +1843,7 @@ class ParticleSimulation {
 
         descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 
-        if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+        if (vkAllocateDescriptorSets(m_device->getLogicalDevice(), &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
             throw std::runtime_error("failed to allocate descriptor sets!");
         }
 
@@ -2162,14 +1887,14 @@ class ParticleSimulation {
             descriptorWrites[1].descriptorCount = 1;
             descriptorWrites[1].pImageInfo = &imageInfo;
 
-            vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+            vkUpdateDescriptorSets(m_device->getLogicalDevice(), static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
         }
     }
 
     void generateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels) {
 
         VkFormatProperties formatProperties;
-        vkGetPhysicalDeviceFormatProperties(physicalDevice, imageFormat, &formatProperties);
+        vkGetPhysicalDeviceFormatProperties(m_device->getPhysicalDevice(), imageFormat, &formatProperties);
         
         if (!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
             throw std::runtime_error("texture image format does not support linear blitting!");
@@ -2251,13 +1976,13 @@ class ParticleSimulation {
             0, nullptr,
             1, &barrier);
 
-        endSingleTimeCommands(commandBuffer, graphicsQueue, commandPoolGraphics);
+        endSingleTimeCommands(commandBuffer, m_device->getGraphicsQueue(), commandPoolGraphics);
 
     }
     
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
         VkPhysicalDeviceMemoryProperties memProperties;
-        vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+        vkGetPhysicalDeviceMemoryProperties(m_device->getPhysicalDevice(), &memProperties);
         
         for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
             if ((typeFilter & (1 << i)) 
@@ -2270,10 +1995,10 @@ class ParticleSimulation {
     }
 
     void drawFrame() {
-        vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+        vkWaitForFences(m_device->getLogicalDevice(), 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
         uint32_t imageIndex;
-        VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+        VkResult result = vkAcquireNextImageKHR(m_device->getLogicalDevice(), swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
            
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
             recreateSwapChain();
@@ -2283,7 +2008,7 @@ class ParticleSimulation {
         }
 
         // Only reset the fence if we are submitting work
-        vkResetFences(device, 1, &inFlightFences[currentFrame]);
+        vkResetFences(m_device->getLogicalDevice(), 1, &inFlightFences[currentFrame]);
 
         vkResetCommandBuffer(commandBuffers[currentFrame], 0);
         recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
@@ -2305,7 +2030,7 @@ class ParticleSimulation {
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = signalSemaphores;
 
-        if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
+        if (vkQueueSubmit(m_device->getGraphicsQueue(), 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
             throw std::runtime_error("failed to submit draw command buffer!");
         }
 
@@ -2319,7 +2044,7 @@ class ParticleSimulation {
         presentInfo.pImageIndices = &imageIndex;
         presentInfo.pResults = nullptr; // Optional
 
-        result = vkQueuePresentKHR(presentQueue, &presentInfo);
+        result = vkQueuePresentKHR(m_device->getPresentQueue(), &presentInfo);
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
             framebufferResized = false;
@@ -2360,6 +2085,6 @@ class ParticleSimulation {
             drawFrame();
         }
 
-        vkDeviceWaitIdle(device);
+        vkDeviceWaitIdle(m_device->getLogicalDevice());
     }
 };
