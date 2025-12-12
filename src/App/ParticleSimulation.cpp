@@ -21,8 +21,8 @@
 #include <stb_image.h>
 #include <tiny_obj_loader.h>
 
-#include "AppTypes.hpp"
-#include "Vertex.hpp"
+#include "Types/AppTypes.hpp"
+#include "Types/Vertex.hpp"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -2352,7 +2352,7 @@ class ParticleSimulation {
         ubo.proj[1][1] *= -1; // GLM was developed to OpenGl and we need to compensate for the inverted Y coordinate
 
         memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
-}
+    }
 
     void mainLoop() {
         while (!glfwWindowShouldClose(window)) {
