@@ -23,7 +23,6 @@ void DeviceContext::executeCommand(std::function<void(VkCommandBuffer)> recorder
 }
 
 void DeviceContext::pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface) {
-
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
 
@@ -48,15 +47,7 @@ void DeviceContext::pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface
         throw std::runtime_error("failed to find a suitable GPU! - empty candidates");
     }
 
-    if (candidates.rbegin()->first > 0) {
-        m_physicalDevice = candidates.rbegin()->second;
-    } else {
-        throw std::runtime_error("failed to find a suitable GPU!");
-    }
-
-    if (m_physicalDevice == VK_NULL_HANDLE) {
-        throw std::runtime_error("failed to find a suitable GPU!");
-    }
+    m_physicalDevice = candidates.rbegin()->second;
 
     // Chosen device
     VkPhysicalDeviceProperties deviceProperties;
