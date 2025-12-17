@@ -124,8 +124,8 @@ class ParticleSimulation {
     VkDescriptorPool descriptorPool;
     std::vector<VkDescriptorSet> descriptorSets;
 
-    VkCommandPool commandPoolGraphics;
-    VkCommandPool commandPoolTransfer;
+    // VkCommandPool commandPoolGraphics;
+    // VkCommandPool commandPoolTransfer;
     std::vector<VkCommandBuffer> commandBuffers;
 
     std::vector <VkSemaphore> imageAvailableSemaphores;
@@ -158,6 +158,7 @@ class ParticleSimulation {
         createSurface();
 
         m_device = std::make_unique<DeviceContext>(instance, surface, deviceExtensions, enableValidationLayers, validationLayers);
+        // createCommandPools();
 
         // TODO: FOR NOW
         msaaSamples = getMaxUsableSampleCount();
@@ -167,7 +168,6 @@ class ParticleSimulation {
         createRenderPass();
         createDescriptorSetLayout();
         createGraphicsPipeline();
-        createCommandPools();
         createColorResources();
         createDepthResources();
         createFramebuffers();
@@ -186,7 +186,7 @@ class ParticleSimulation {
 
     void cleanup() {
 
-        VkDevice device = m_device->getLogicalDevice();
+        VkDevice device = m_device->m_logicalDevice;
 
         cleanupSwapChain();
 
@@ -212,8 +212,8 @@ class ParticleSimulation {
         vkDestroyDescriptorPool(device, descriptorPool, nullptr);
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
-        vkDestroyCommandPool(device, commandPoolGraphics, nullptr);
-        vkDestroyCommandPool(device, commandPoolTransfer, nullptr);
+        // vkDestroyCommandPool(device, commandPoolGraphics, nullptr);
+        // vkDestroyCommandPool(device, commandPoolTransfer, nullptr);
 
         vkDestroyPipeline(device, graphicsPipeline, nullptr);
         vkDestroyPipelineLayout(device, m_pipelineLayout, nullptr);
@@ -410,7 +410,7 @@ class ParticleSimulation {
 
     VkSampleCountFlagBits getMaxUsableSampleCount() {
         VkPhysicalDeviceProperties physicalDeviceProperties;
-        vkGetPhysicalDeviceProperties(m_device->getPhysicalDevice(), &physicalDeviceProperties);
+        vkGetPhysicalDeviceProperties(m_device->m_physicalDevice, &physicalDeviceProperties);
 
         VkSampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts;
         if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
@@ -461,9 +461,9 @@ class ParticleSimulation {
         swapChainImageFormat = surfaceFormat.format;
         swapChainExtent = extent;
 
-        uint32_t queueFamilyIndices[] = {m_device->getQueueFamilyIndices().graphicsFamily.value(), m_device->getQueueFamilyIndices().presentFamily.value()};
+        uint32_t queueFamilyIndices[] = {m_device->m_queueIndices.graphicsFamily.value(), m_device->m_queueIndices.presentFamily.value()};
 
-        if (m_device->getQueueFamilyIndices().graphicsFamily != m_device->getQueueFamilyIndices().presentFamily) {
+        if (m_device->m_queueIndices.graphicsFamily != m_device->m_queueIndices.presentFamily) {
             /**
              * In -VK_SHARING_MODE_CONCURRENT-
              * Images can be used across multiple queue families
@@ -494,7 +494,7 @@ class ParticleSimulation {
         createInfo.clipped = VK_TRUE; // This means we do not care about pixels being obfuscated
         createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-        VkDevice tmp_device = m_device->getLogicalDevice();
+        VkDevice tmp_device = m_device->m_logicalDevice;
 
         if (vkCreateSwapchainKHR(tmp_device, &createInfo, nullptr, &swapChain) != VK_SUCCESS) {
             throw std::runtime_error("failed to create swap chain!");
@@ -549,7 +549,7 @@ class ParticleSimulation {
 
     void cleanupSwapChain() {
 
-        VkDevice device = m_device->getLogicalDevice();
+        VkDevice device = m_device->m_logicalDevice;
 
         vkDestroyImageView(device, colorImageView, nullptr);
         vkDestroyImage(device, colorImage, nullptr);
@@ -593,7 +593,7 @@ class ParticleSimulation {
         }
 
         // We shouldn't touch resources that may still be in use.
-        vkDeviceWaitIdle(m_device->getLogicalDevice());
+        vkDeviceWaitIdle(m_device->m_logicalDevice);
 
         cleanupSwapChain();
 
@@ -697,7 +697,7 @@ class ParticleSimulation {
         renderPassInfo.dependencyCount = 1;
         renderPassInfo.pDependencies = &dependency;
 
-        if (vkCreateRenderPass(m_device->getLogicalDevice(), &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
+        if (vkCreateRenderPass(m_device->m_logicalDevice, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
             throw std::runtime_error("failed to create render pass!");
         }
     }
@@ -723,7 +723,7 @@ class ParticleSimulation {
         layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
         layoutInfo.pBindings = bindings.data();
 
-        if (vkCreateDescriptorSetLayout(m_device->getLogicalDevice(), &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+        if (vkCreateDescriptorSetLayout(m_device->m_logicalDevice, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create a descriptor set layout!");
         }
     }
@@ -764,16 +764,16 @@ class ParticleSimulation {
         pipelineLayoutInfo.pushConstantRangeCount = 0;
         pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
-        if(vkCreatePipelineLayout(m_device->getLogicalDevice(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
+        if(vkCreatePipelineLayout(m_device->m_logicalDevice, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create pipeline layotu!");
         }
 
         // Create pipeline
-        graphicsPipeline = builder.build(m_device->getLogicalDevice(), renderPass, m_pipelineLayout);
+        graphicsPipeline = builder.build(m_device->m_logicalDevice, renderPass, m_pipelineLayout);
 
         // Discard unused
-        vkDestroyShaderModule(m_device->getLogicalDevice(), fragShaderModule, nullptr);
-        vkDestroyShaderModule(m_device->getLogicalDevice(), vertShaderModule, nullptr);
+        vkDestroyShaderModule(m_device->m_logicalDevice, fragShaderModule, nullptr);
+        vkDestroyShaderModule(m_device->m_logicalDevice, vertShaderModule, nullptr);
     }
 
     VkShaderModule createShaderModule(const std::vector<char>& code) {
@@ -783,7 +783,7 @@ class ParticleSimulation {
         createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
         VkShaderModule shaderModule;
-        if (vkCreateShaderModule(m_device->getLogicalDevice(), &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+        if (vkCreateShaderModule(m_device->m_logicalDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
             throw std::runtime_error("failed to create shader module!");
         }
 
@@ -810,30 +810,9 @@ class ParticleSimulation {
             framebufferInfo.height = swapChainExtent.height;
             framebufferInfo.layers = 1;
 
-            if (vkCreateFramebuffer(m_device->getLogicalDevice(), &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
+            if (vkCreateFramebuffer(m_device->m_logicalDevice, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
                 throw std::runtime_error("failed to create framebuffer!");
             }
-        }
-    }
-
-    void createCommandPools() {
-
-        VkCommandPoolCreateInfo poolInfoGraphics{};
-        poolInfoGraphics.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        poolInfoGraphics.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        poolInfoGraphics.queueFamilyIndex = m_device->getQueueFamilyIndices().graphicsFamily.value();
-
-        if (vkCreateCommandPool(m_device->getLogicalDevice(), &poolInfoGraphics, nullptr, &commandPoolGraphics) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create graphics command pool!");
-        }
-
-        VkCommandPoolCreateInfo poolInfoTransfer{};
-        poolInfoTransfer.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        poolInfoTransfer.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        poolInfoTransfer.queueFamilyIndex = m_device->getQueueFamilyIndices().transferFamily.value();
-
-        if (vkCreateCommandPool(m_device->getLogicalDevice(), &poolInfoTransfer, nullptr, &commandPoolTransfer) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create transfer command pool!");
         }
     }
 
@@ -864,7 +843,7 @@ class ParticleSimulation {
         for (VkFormat format : candidates){
 
             VkFormatProperties props;
-            vkGetPhysicalDeviceFormatProperties(m_device->getPhysicalDevice(), format, &props);
+            vkGetPhysicalDeviceFormatProperties(m_device->m_physicalDevice, format, &props);
 
             if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
                 return format;
@@ -916,13 +895,13 @@ class ParticleSimulation {
             stagingBufferMemory
         );
 
-        uint32_t transferFamily = m_device->getQueueFamilyIndices().transferFamily.value();
-        uint32_t graphicsFamily = m_device->getQueueFamilyIndices().graphicsFamily.value();
+        uint32_t transferFamily = m_device->m_queueIndices.transferFamily.value();
+        uint32_t graphicsFamily = m_device->m_queueIndices.graphicsFamily.value();
 
         void* data;
-        vkMapMemory(m_device->getLogicalDevice(), stagingBufferMemory, 0, imageSize, 0, &data);
+        vkMapMemory(m_device->m_logicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
         memcpy(data, pixels, static_cast<size_t>(imageSize));
-        vkUnmapMemory(m_device->getLogicalDevice(), stagingBufferMemory);
+        vkUnmapMemory(m_device->m_logicalDevice, stagingBufferMemory);
 
         stbi_image_free(pixels);
 
@@ -941,8 +920,6 @@ class ParticleSimulation {
 
         // Transition the layout from undefined
         {
-            VkCommandBuffer transferCmd = beginSingleTimeCommands(commandPoolTransfer);
-
             VkImageMemoryBarrier barrier{};
             barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
             barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -963,17 +940,21 @@ class ParticleSimulation {
             barrier.srcAccessMask = 0;
             barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
-            vkCmdPipelineBarrier(
-                transferCmd,
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                0,
-                0, nullptr,
-                0, nullptr,
-                1, &barrier
+            m_device->executeCommand(
+                [&](VkCommandBuffer cmd){
+                    vkCmdPipelineBarrier(
+                        cmd,
+                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                        VK_PIPELINE_STAGE_TRANSFER_BIT,
+                        0,
+                        0, nullptr,
+                        0, nullptr,
+                        1, &barrier
+                    );
+                },
+                m_device->m_transferCmdPool,
+                m_device->m_transferQueue
             );
-
-            endSingleTimeCommands(transferCmd, m_device->getTransferQueue(), commandPoolTransfer);
         }
 
         copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
@@ -981,8 +962,6 @@ class ParticleSimulation {
         // PART A: Release from Transfer Queue
         // We use the Transfer Pool and Transfer Queue here
         {
-            VkCommandBuffer transferCmd = beginSingleTimeCommands(commandPoolTransfer);
-
             VkImageMemoryBarrier barrier{};
             barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
             barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -1006,23 +985,25 @@ class ParticleSimulation {
             barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             barrier.dstAccessMask = 0;
 
-            vkCmdPipelineBarrier(
-                transferCmd,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                0,
-                0, nullptr,
-                0, nullptr,
-                1, &barrier
+            m_device->executeCommand(
+                [&](VkCommandBuffer cmd){
+                    vkCmdPipelineBarrier(
+                        cmd,
+                        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                        0,
+                        0, nullptr,
+                        0, nullptr,
+                        1, &barrier
+                    );
+                },
+                m_device->m_transferCmdPool,
+                m_device->m_transferQueue
             );
-
-            endSingleTimeCommands(transferCmd, m_device->getTransferQueue(), commandPoolTransfer);
         }
 
         // PART B: Acquire on Graphics Queue
         // We use the Graphics Pool and Graphics Queue here
         {
-            VkCommandBuffer graphicsCmd = beginSingleTimeCommands(commandPoolGraphics);
-
             VkImageMemoryBarrier barrier{};
             barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
             barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -1046,22 +1027,26 @@ class ParticleSimulation {
             barrier.srcAccessMask = 0;
             barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-            vkCmdPipelineBarrier(
-                graphicsCmd,
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                0,
-                0, nullptr,
-                0, nullptr,
-                1, &barrier
+            m_device->executeCommand(
+                [&](VkCommandBuffer cmd){
+                    vkCmdPipelineBarrier(
+                        cmd,
+                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                        0,
+                        0, nullptr,
+                        0, nullptr,
+                        1, &barrier
+                    );
+                },
+                m_device->m_graphicsCmdPool,
+                m_device->m_graphicsQueue
             );
-
-            endSingleTimeCommands(graphicsCmd, m_device->getGraphicsQueue(), commandPoolGraphics);
         }
 
         generateMipmaps(textureImage, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, mipLevels);
 
-        vkDestroyBuffer(m_device->getLogicalDevice(), stagingBuffer, nullptr);
-        vkFreeMemory(m_device->getLogicalDevice(), stagingBufferMemory, nullptr);
+        vkDestroyBuffer(m_device->m_logicalDevice, stagingBuffer, nullptr);
+        vkFreeMemory(m_device->m_logicalDevice, stagingBufferMemory, nullptr);
     }
 
     void createTextureImageView() {
@@ -1080,11 +1065,9 @@ class ParticleSimulation {
         samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         
-
-
-        // Quering the m_device->getLogicalDevice() properties so we know what anisotropy we can use
+        // Quering the m_device->m_logicalDevice properties so we know what anisotropy we can use
         VkPhysicalDeviceProperties properties{};
-        vkGetPhysicalDeviceProperties(m_device->getPhysicalDevice(), &properties);
+        vkGetPhysicalDeviceProperties(m_device->m_physicalDevice, &properties);
 
         samplerInfo.anisotropyEnable = VK_TRUE;
         samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy; // Just uses the max since performance isn't a concern
@@ -1101,7 +1084,7 @@ class ParticleSimulation {
         samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
         samplerInfo.mipLodBias = 0.0f; // Optional
 
-        if (vkCreateSampler(m_device->getLogicalDevice(), &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
+        if (vkCreateSampler(m_device->m_logicalDevice, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
             throw std::runtime_error("failed to create texture sampler!");
         }
     }
@@ -1119,7 +1102,7 @@ class ParticleSimulation {
         viewInfo.subresourceRange.layerCount = 1;
 
         VkImageView imageView;
-        if (vkCreateImageView(m_device->getLogicalDevice(), &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
+        if (vkCreateImageView(m_device->m_logicalDevice, &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
             throw std::runtime_error("failed to create image view!");
         }
 
@@ -1153,23 +1136,23 @@ class ParticleSimulation {
         imageInfo.samples = numSamples;
         imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        if (vkCreateImage(m_device->getLogicalDevice(), &imageInfo, nullptr, &image) != VK_SUCCESS) {
+        if (vkCreateImage(m_device->m_logicalDevice, &imageInfo, nullptr, &image) != VK_SUCCESS) {
             throw std::runtime_error("failed to create image!");
         }
 
         VkMemoryRequirements memRequirements;
-        vkGetImageMemoryRequirements(m_device->getLogicalDevice(), image, &memRequirements);
+        vkGetImageMemoryRequirements(m_device->m_logicalDevice, image, &memRequirements);
 
         VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocInfo.allocationSize = memRequirements.size;
         allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
 
-        if (vkAllocateMemory(m_device->getLogicalDevice(), &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
+        if (vkAllocateMemory(m_device->m_logicalDevice, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
             throw std::runtime_error("failed to allocate image memory!");
         }
 
-        vkBindImageMemory(m_device->getLogicalDevice(), image, imageMemory, 0);
+        vkBindImageMemory(m_device->m_logicalDevice, image, imageMemory, 0);
     }
 
     void createColorResources() {
@@ -1196,11 +1179,11 @@ class ParticleSimulation {
 
         VkCommandBufferAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.commandPool = commandPoolGraphics;
+        allocInfo.commandPool = m_device->m_graphicsCmdPool;
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         allocInfo.commandBufferCount = commandBuffers.size();
 
-        if (vkAllocateCommandBuffers(m_device->getLogicalDevice(), &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
+        if (vkAllocateCommandBuffers(m_device->m_logicalDevice, &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
             throw std::runtime_error("failed to allocate command buffers!");
         }
     }
@@ -1303,51 +1286,16 @@ class ParticleSimulation {
         fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // Create the fence in signaled state, so the first call of drawFrame() will occur
 
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            if (vkCreateSemaphore(m_device->getLogicalDevice(), &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
-                vkCreateSemaphore(m_device->getLogicalDevice(), &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
-                vkCreateFence(m_device->getLogicalDevice(), &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
+            if (vkCreateSemaphore(m_device->m_logicalDevice, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
+                vkCreateSemaphore(m_device->m_logicalDevice, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
+                vkCreateFence(m_device->m_logicalDevice, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
                 throw std::runtime_error("failed to create semaphores!");
             }
         }
 
     }
 
-    VkCommandBuffer beginSingleTimeCommands(VkCommandPool commandPool) {
-        VkCommandBufferAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandPool = commandPool;
-        allocInfo.commandBufferCount = 1;
-
-        VkCommandBuffer commandBuffer;
-        vkAllocateCommandBuffers(m_device->getLogicalDevice(), &allocInfo, &commandBuffer);
-
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-        vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-        return commandBuffer;
-    }
-
-    void endSingleTimeCommands(VkCommandBuffer commandBuffer, VkQueue queue, VkCommandPool commandPool) {
-        vkEndCommandBuffer(commandBuffer);
-
-        VkSubmitInfo submitInfo{};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &commandBuffer;
-
-        vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
-        vkQueueWaitIdle(queue);
-
-        vkFreeCommandBuffers(m_device->getLogicalDevice(), commandPool, 1, &commandBuffer);
-    }
-
     void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
-        VkCommandBuffer commandBuffer = beginSingleTimeCommands(commandPoolGraphics);
-
         VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         barrier.oldLayout = oldLayout;
@@ -1369,6 +1317,7 @@ class ParticleSimulation {
         VkPipelineStageFlags sourceStage;
         VkPipelineStageFlags destinationStage;
 
+        // TOFIX: I don't like this
         if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
             barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 
@@ -1405,16 +1354,20 @@ class ParticleSimulation {
             throw std::invalid_argument("unsupported layout transition!");
         }
 
-        vkCmdPipelineBarrier(
-            commandBuffer,
-            sourceStage, destinationStage,
-            0,
-            0, nullptr,
-            0, nullptr,
-            1, &barrier
+        m_device->executeCommand(
+            [&](VkCommandBuffer cmd) {
+                vkCmdPipelineBarrier(
+                    cmd,
+                    sourceStage, destinationStage,
+                    0,
+                    0, nullptr,
+                    0, nullptr,
+                    1, &barrier
+                );
+            }, 
+            m_device->m_graphicsCmdPool, 
+            m_device->m_graphicsQueue
         );
-
-        endSingleTimeCommands(commandBuffer, m_device->getGraphicsQueue(), commandPoolGraphics);
     }
 
     // Overload for ownership transfer
@@ -1430,8 +1383,6 @@ class ParticleSimulation {
         uint32_t mipLevels
     )
     {
-        VkCommandBuffer commandBuffer = beginSingleTimeCommands(commandPool);
-
         VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         barrier.oldLayout = oldLayout;
@@ -1451,15 +1402,16 @@ class ParticleSimulation {
         VkPipelineStageFlags sourceStage;
         VkPipelineStageFlags destinationStage;
 
+        // TODO: FIX THIS TRANSITION STUFF
         // IF this is the RELEASE operation (Transfer Queue)
-        if (srcFamily != dstFamily && commandQueue == m_device->getTransferQueue()) {
+        if (srcFamily != dstFamily && commandQueue == m_device->m_transferQueue) {
             barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             barrier.dstAccessMask = 0;
             sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
             destinationStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
         }
         // IF this is the ACQUIRE operation (Graphics Queue)
-        else if (srcFamily != dstFamily && commandQueue == m_device->getGraphicsQueue()) {
+        else if (srcFamily != dstFamily && commandQueue == m_device->m_graphicsQueue) {
             barrier.srcAccessMask = 0;
             barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
             sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
@@ -1469,15 +1421,29 @@ class ParticleSimulation {
             throw std::invalid_argument("unsupported image ownership transition!");
         }
 
-        vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+        m_device->executeCommand(
+            [&](VkCommandBuffer cmd) {
+                vkCmdPipelineBarrier(
+                    cmd,
+                    sourceStage, 
+                    destinationStage,
+                    0,
+                    0,
+                    nullptr,
+                    0,
+                    nullptr,
+                    1,
+                    &barrier
+                );
+            },
+            // TOFIX: This looks ugly
+            commandPool,
+            commandQueue
+        );
 
-        endSingleTimeCommands(commandBuffer, commandQueue, commandPool);
     }
 
     void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
-        VkCommandBuffer commandBuffer = beginSingleTimeCommands(commandPoolTransfer);
-
-
         VkBufferImageCopy region{};
         region.bufferOffset = 0;
         region.bufferRowLength = 0;
@@ -1495,16 +1461,20 @@ class ParticleSimulation {
             1
         };
 
-        vkCmdCopyBufferToImage(
-            commandBuffer,
-            buffer,
-            image,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1,
-            &region
+        m_device->executeCommand(
+            [&](VkCommandBuffer cmd) {
+                vkCmdCopyBufferToImage(
+                    cmd,
+                    buffer,
+                    image,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    1,
+                    &region
+                );
+            },
+            m_device->m_transferCmdPool,
+            m_device->m_transferQueue
         );
-
-        endSingleTimeCommands(commandBuffer, m_device->getTransferQueue(), commandPoolTransfer);
     }
 
     void createBuffer(
@@ -1521,12 +1491,12 @@ class ParticleSimulation {
         bufferInfo.usage = usage;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        if (vkCreateBuffer(m_device->getLogicalDevice(), &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+        if (vkCreateBuffer(m_device->m_logicalDevice, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
             throw std::runtime_error("failed to create vertex buffer!");
         }
 
         VkMemoryRequirements memRequirements;
-        vkGetBufferMemoryRequirements(m_device->getLogicalDevice(), buffer, &memRequirements);
+        vkGetBufferMemoryRequirements(m_device->m_logicalDevice, buffer, &memRequirements);
 
         VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -1536,21 +1506,24 @@ class ParticleSimulation {
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
             );
 
-        if (vkAllocateMemory(m_device->getLogicalDevice(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+        if (vkAllocateMemory(m_device->m_logicalDevice, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
             throw std::runtime_error("failed to allocate vertex buffer memory!");
         }
 
-        vkBindBufferMemory(m_device->getLogicalDevice(), buffer, bufferMemory, 0);
+        vkBindBufferMemory(m_device->m_logicalDevice, buffer, bufferMemory, 0);
     }
 
     void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
-        VkCommandBuffer commandBuffer = beginSingleTimeCommands(commandPoolTransfer);
-
         VkBufferCopy copyRegion{};
         copyRegion.size = size;
-        vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
-        endSingleTimeCommands(commandBuffer, m_device->getTransferQueue(), commandPoolTransfer);
+        m_device->executeCommand(
+            [&](VkCommandBuffer cmd) {
+                vkCmdCopyBuffer(cmd, srcBuffer, dstBuffer, 1, &copyRegion);
+            },
+            m_device->m_transferCmdPool,
+            m_device->m_transferQueue
+        );
     }
 
     void loadModel() {
@@ -1611,9 +1584,9 @@ class ParticleSimulation {
         );
 
         void* data;
-        vkMapMemory(m_device->getLogicalDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
+        vkMapMemory(m_device->m_logicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
         memcpy(data, vertices.data(), (size_t)bufferSize);
-        vkUnmapMemory(m_device->getLogicalDevice(), stagingBufferMemory);
+        vkUnmapMemory(m_device->m_logicalDevice, stagingBufferMemory);
 
         createBuffer(bufferSize,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -1624,8 +1597,8 @@ class ParticleSimulation {
 
         copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
 
-        vkDestroyBuffer(m_device->getLogicalDevice(), stagingBuffer, nullptr);
-        vkFreeMemory(m_device->getLogicalDevice(), stagingBufferMemory, nullptr);
+        vkDestroyBuffer(m_device->m_logicalDevice, stagingBuffer, nullptr);
+        vkFreeMemory(m_device->m_logicalDevice, stagingBufferMemory, nullptr);
     }
 
     void createIndexBuffer() {
@@ -1642,9 +1615,9 @@ class ParticleSimulation {
         );
 
         void* data;
-        vkMapMemory(m_device->getLogicalDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
+        vkMapMemory(m_device->m_logicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
         memcpy(data, indices.data(), (size_t)bufferSize);
-        vkUnmapMemory(m_device->getLogicalDevice(), stagingBufferMemory);
+        vkUnmapMemory(m_device->m_logicalDevice, stagingBufferMemory);
 
         createBuffer(bufferSize,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
@@ -1655,8 +1628,8 @@ class ParticleSimulation {
 
         copyBuffer(stagingBuffer, indexBuffer, bufferSize);
 
-        vkDestroyBuffer(m_device->getLogicalDevice(), stagingBuffer, nullptr);
-        vkFreeMemory(m_device->getLogicalDevice(), stagingBufferMemory, nullptr);
+        vkDestroyBuffer(m_device->m_logicalDevice, stagingBuffer, nullptr);
+        vkFreeMemory(m_device->m_logicalDevice, stagingBufferMemory, nullptr);
     }
 
     void createUniformBuffers() {
@@ -1669,7 +1642,7 @@ class ParticleSimulation {
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
 
-            vkMapMemory(m_device->getLogicalDevice(), uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
+            vkMapMemory(m_device->m_logicalDevice, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
         }
     }
 
@@ -1686,7 +1659,7 @@ class ParticleSimulation {
         poolInfo.pPoolSizes = poolSizes.data();
         poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
-        if (vkCreateDescriptorPool(m_device->getLogicalDevice(), &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+        if (vkCreateDescriptorPool(m_device->m_logicalDevice, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
             throw std::runtime_error("failed to create descriptor pool!");
         }
     }
@@ -1701,7 +1674,7 @@ class ParticleSimulation {
 
         descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 
-        if (vkAllocateDescriptorSets(m_device->getLogicalDevice(), &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+        if (vkAllocateDescriptorSets(m_device->m_logicalDevice, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
             throw std::runtime_error("failed to allocate descriptor sets!");
         }
 
@@ -1745,21 +1718,29 @@ class ParticleSimulation {
             descriptorWrites[1].descriptorCount = 1;
             descriptorWrites[1].pImageInfo = &imageInfo;
 
-            vkUpdateDescriptorSets(m_device->getLogicalDevice(), static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+            vkUpdateDescriptorSets(m_device->m_logicalDevice, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
         }
     }
 
     void generateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels) {
-
+        // TODO: Add this to device selection
         VkFormatProperties formatProperties;
-        vkGetPhysicalDeviceFormatProperties(m_device->getPhysicalDevice(), imageFormat, &formatProperties);
+        vkGetPhysicalDeviceFormatProperties(m_device->m_physicalDevice, imageFormat, &formatProperties);
         
         if (!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
             throw std::runtime_error("texture image format does not support linear blitting!");
         }
-        
-        VkCommandBuffer commandBuffer = beginSingleTimeCommands(commandPoolGraphics);
 
+        m_device->executeCommand(
+            [&](VkCommandBuffer cmd) {
+                this->cmdRecordMipmaps(cmd, image, imageFormat, texWidth, texHeight, mipLevels);
+            },
+            m_device->m_graphicsCmdPool,
+            m_device->m_graphicsQueue
+        );
+    }
+
+    void cmdRecordMipmaps(VkCommandBuffer cmd, VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels) {
         VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         barrier.image = image;
@@ -1781,7 +1762,7 @@ class ParticleSimulation {
             barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 
-            vkCmdPipelineBarrier(commandBuffer,
+            vkCmdPipelineBarrier(cmd,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
                 0, nullptr,
                 0, nullptr,
@@ -1801,7 +1782,7 @@ class ParticleSimulation {
             blit.dstSubresource.baseArrayLayer = 0;
             blit.dstSubresource.layerCount = 1;
 
-            vkCmdBlitImage(commandBuffer,
+            vkCmdBlitImage(cmd,
                 image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 1, &blit,
@@ -1812,7 +1793,7 @@ class ParticleSimulation {
             barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
             barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-            vkCmdPipelineBarrier(commandBuffer,
+            vkCmdPipelineBarrier(cmd,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
                 0, nullptr,
                 0, nullptr,
@@ -1828,19 +1809,16 @@ class ParticleSimulation {
         barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-        vkCmdPipelineBarrier(commandBuffer,
+        vkCmdPipelineBarrier(cmd,
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
             0, nullptr,
             0, nullptr,
             1, &barrier);
-
-        endSingleTimeCommands(commandBuffer, m_device->getGraphicsQueue(), commandPoolGraphics);
-
     }
-    
+
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
         VkPhysicalDeviceMemoryProperties memProperties;
-        vkGetPhysicalDeviceMemoryProperties(m_device->getPhysicalDevice(), &memProperties);
+        vkGetPhysicalDeviceMemoryProperties(m_device->m_physicalDevice, &memProperties);
         
         for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
             if ((typeFilter & (1 << i)) 
@@ -1853,10 +1831,10 @@ class ParticleSimulation {
     }
 
     void drawFrame() {
-        vkWaitForFences(m_device->getLogicalDevice(), 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+        vkWaitForFences(m_device->m_logicalDevice, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
         uint32_t imageIndex;
-        VkResult result = vkAcquireNextImageKHR(m_device->getLogicalDevice(), swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+        VkResult result = vkAcquireNextImageKHR(m_device->m_logicalDevice, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
            
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
             recreateSwapChain();
@@ -1866,7 +1844,7 @@ class ParticleSimulation {
         }
 
         // Only reset the fence if we are submitting work
-        vkResetFences(m_device->getLogicalDevice(), 1, &inFlightFences[currentFrame]);
+        vkResetFences(m_device->m_logicalDevice, 1, &inFlightFences[currentFrame]);
 
         vkResetCommandBuffer(commandBuffers[currentFrame], 0);
         recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
@@ -1888,7 +1866,7 @@ class ParticleSimulation {
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = signalSemaphores;
 
-        if (vkQueueSubmit(m_device->getGraphicsQueue(), 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
+        if (vkQueueSubmit(m_device->m_graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
             throw std::runtime_error("failed to submit draw command buffer!");
         }
 
@@ -1902,7 +1880,7 @@ class ParticleSimulation {
         presentInfo.pImageIndices = &imageIndex;
         presentInfo.pResults = nullptr; // Optional
 
-        result = vkQueuePresentKHR(m_device->getPresentQueue(), &presentInfo);
+        result = vkQueuePresentKHR(m_device->m_presentQueue, &presentInfo);
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
             framebufferResized = false;
@@ -1943,6 +1921,6 @@ class ParticleSimulation {
             drawFrame();
         }
 
-        vkDeviceWaitIdle(m_device->getLogicalDevice());
+        vkDeviceWaitIdle(m_device->m_logicalDevice);
     }
 };

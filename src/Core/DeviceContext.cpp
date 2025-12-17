@@ -4,22 +4,23 @@
 #include <map>
 #include <set>
 #include <stdexcept>
+#include <vulkan/vulkan_core.h>
 
 DeviceContext::DeviceContext(VkInstance instance, VkSurfaceKHR surface, const std::vector<const char*> requiredDeviceExtensions, bool enableValidationLayers, std::vector<const char *> validationLayers) {
     m_requiredDeviceExtensions = requiredDeviceExtensions;
     pickPhysicalDevice(instance, surface);
     m_queueIndices = findQueueFamilies(m_physicalDevice, surface);
     createLogicalDevice(surface, enableValidationLayers, validationLayers);
+    createCommandPools();
 }
 
 DeviceContext::~DeviceContext() {
-    if(m_device != VK_NULL_HANDLE) {
-        vkDestroyDevice(m_device, nullptr);
-    }
-}
+    vkDestroyCommandPool(m_logicalDevice, m_graphicsCmdPool, nullptr);
+    vkDestroyCommandPool(m_logicalDevice, m_transferCmdPool, nullptr);
 
-void DeviceContext::executeCommand(std::function<void(VkCommandBuffer)> recorder) {
-    throw std::runtime_error("not yet implemented funcionality! - DeviceContext::executeCommand(std::function<void(VkCommandBuffer)> recorder)");
+    if(m_logicalDevice != VK_NULL_HANDLE) {
+        vkDestroyDevice(m_logicalDevice, nullptr);
+    }
 }
 
 void DeviceContext::pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface) {
@@ -150,59 +151,6 @@ SwapChainSupportDetails DeviceContext::querySwapChainSupport(VkPhysicalDevice de
     return details;
 }
 
-void DeviceContext::createLogicalDevice(VkSurfaceKHR surface, bool enableValidationLayers, std::vector<const char *> validationLayers) {
-    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-    std::set<uint32_t> uniqueQueueFamilies = {
-        m_queueIndices.graphicsFamily.value(),
-        m_queueIndices.presentFamily.value(),
-        m_queueIndices.transferFamily.value()
-    };
-
-    float queuePriority = 1.0f;
-    for (uint32_t queueFamily : uniqueQueueFamilies) {
-        VkDeviceQueueCreateInfo queueCreateInfo{};
-        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queueCreateInfo.queueFamilyIndex = queueFamily;
-        queueCreateInfo.queueCount = 1;
-        queueCreateInfo.pQueuePriorities = &queuePriority;
-        queueCreateInfos.push_back(queueCreateInfo);
-    }
-
-    // Device specific features we wanna use
-    VkPhysicalDeviceFeatures deviceFeatures{};
-    deviceFeatures.samplerAnisotropy = VK_TRUE;
-    deviceFeatures.sampleRateShading = VK_TRUE;
-    
-    VkPhysicalDeviceSynchronization2Features sync2Features = {};
-    sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
-    sync2Features.synchronization2 = VK_TRUE;
-    
-    VkDeviceCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    createInfo.pEnabledFeatures = &deviceFeatures;
-    createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-    createInfo.pQueueCreateInfos = queueCreateInfos.data();
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(m_requiredDeviceExtensions.size());
-    createInfo.ppEnabledExtensionNames = m_requiredDeviceExtensions.data();
-    createInfo.pNext = &sync2Features;
-
-    if (enableValidationLayers) {
-        // Both parameters are not used anymore but it's recommended to set for backwards compatibility
-        createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-        createInfo.ppEnabledLayerNames = validationLayers.data();
-    } else {
-        createInfo.enabledLayerCount = 0;
-    }
-
-    if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create logical device!");
-    }
-
-    vkGetDeviceQueue(m_device, m_queueIndices.graphicsFamily.value(), 0, &m_graphicsQueue);
-    vkGetDeviceQueue(m_device, m_queueIndices.transferFamily.value(), 0, &m_transferQueue);
-    vkGetDeviceQueue(m_device, m_queueIndices.presentFamily.value(), 0, &m_presentQueue);
-}
-
 QueueFamilyIndices DeviceContext::findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
     QueueFamilyIndices indices;
 
@@ -272,4 +220,109 @@ QueueFamilyIndices DeviceContext::findQueueFamilies(VkPhysicalDevice device, VkS
     }
 
     return indices;
+}
+
+void DeviceContext::createLogicalDevice(VkSurfaceKHR surface, bool enableValidationLayers, std::vector<const char *> validationLayers) {
+    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+    std::set<uint32_t> uniqueQueueFamilies = {
+        m_queueIndices.graphicsFamily.value(),
+        m_queueIndices.presentFamily.value(),
+        m_queueIndices.transferFamily.value()
+    };
+
+    float queuePriority = 1.0f;
+    for (uint32_t queueFamily : uniqueQueueFamilies) {
+        VkDeviceQueueCreateInfo queueCreateInfo{};
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = queueFamily;
+        queueCreateInfo.queueCount = 1;
+        queueCreateInfo.pQueuePriorities = &queuePriority;
+        queueCreateInfos.push_back(queueCreateInfo);
+    }
+
+    // Device specific features we wanna use
+    VkPhysicalDeviceFeatures deviceFeatures{};
+    deviceFeatures.samplerAnisotropy = VK_TRUE;
+    deviceFeatures.sampleRateShading = VK_TRUE;
+    
+    VkPhysicalDeviceSynchronization2Features sync2Features = {};
+    sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
+    sync2Features.synchronization2 = VK_TRUE;
+    
+    VkDeviceCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    createInfo.pEnabledFeatures = &deviceFeatures;
+    createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+    createInfo.pQueueCreateInfos = queueCreateInfos.data();
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(m_requiredDeviceExtensions.size());
+    createInfo.ppEnabledExtensionNames = m_requiredDeviceExtensions.data();
+    createInfo.pNext = &sync2Features;
+
+    if (enableValidationLayers) {
+        // Both parameters are not used anymore but it's recommended to set for backwards compatibility
+        createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+        createInfo.ppEnabledLayerNames = validationLayers.data();
+    } else {
+        createInfo.enabledLayerCount = 0;
+    }
+
+    if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_logicalDevice) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create logical device!");
+    }
+
+    vkGetDeviceQueue(m_logicalDevice, m_queueIndices.graphicsFamily.value(), 0, &m_graphicsQueue);
+    vkGetDeviceQueue(m_logicalDevice, m_queueIndices.transferFamily.value(), 0, &m_transferQueue);
+    vkGetDeviceQueue(m_logicalDevice, m_queueIndices.presentFamily.value(), 0, &m_presentQueue);
+}
+
+void DeviceContext::createCommandPools() {
+    VkCommandPoolCreateInfo poolInfoGraphics{};
+    poolInfoGraphics.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfoGraphics.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    poolInfoGraphics.queueFamilyIndex = m_queueIndices.graphicsFamily.value();
+
+    if (vkCreateCommandPool(m_logicalDevice, &poolInfoGraphics, nullptr, &m_graphicsCmdPool) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create graphics command pool!");
+    }
+
+    VkCommandPoolCreateInfo poolInfoTransfer{};
+    poolInfoTransfer.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfoTransfer.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    poolInfoTransfer.queueFamilyIndex = m_queueIndices.transferFamily.value();
+
+    if (vkCreateCommandPool(m_logicalDevice, &poolInfoTransfer, nullptr, &m_transferCmdPool) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create transfer command pool!");
+    }
+}
+
+void DeviceContext::executeCommand(std::function<void(VkCommandBuffer)> recorder, VkCommandPool cmdPool, VkQueue queue) {
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = cmdPool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer{};
+    vkAllocateCommandBuffers(m_logicalDevice, &allocInfo, &commandBuffer);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+    
+    // Run the lambda function provided by the caller :>
+    recorder(commandBuffer);
+
+    vkEndCommandBuffer(commandBuffer);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(queue);
+
+    vkFreeCommandBuffers(m_logicalDevice, cmdPool, 1, &commandBuffer);
 }
