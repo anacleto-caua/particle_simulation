@@ -11,7 +11,9 @@ public:
     GpuBuffer(const GpuBuffer&) = delete;
     GpuBuffer& operator=(const GpuBuffer&) = delete;
 
+    void copyFromCpu(const void *sourceData);
     void copyFromCpu(const void *sourceData, size_t size);
+    
     void mapAndWrite(const void* data, VkDeviceSize size);
 
     void copyFromBuffer(GpuBuffer *srcBuffer);

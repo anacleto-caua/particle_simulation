@@ -40,6 +40,10 @@ GpuBuffer::~GpuBuffer() {
     vkFreeMemory(m_deviceCtx.m_logicalDevice, m_memory, nullptr);
 }
 
+void GpuBuffer::copyFromCpu(const void *sourceData) {
+    copyFromCpu(sourceData, m_size);
+}
+
 void GpuBuffer::copyFromCpu(const void *sourceData, size_t size) {
     GpuBuffer stagingBuffer = GpuBuffer(
         m_deviceCtx,
@@ -49,12 +53,15 @@ void GpuBuffer::copyFromCpu(const void *sourceData, size_t size) {
         queueCtx
     );
 
-    void* mappedData;
-    vkMapMemory(stagingBuffer.m_deviceCtx.m_logicalDevice, stagingBuffer.m_memory, 0, size, 0, &mappedData);
-    memcpy(mappedData, sourceData, size);
-    vkUnmapMemory(stagingBuffer.m_deviceCtx.m_logicalDevice, stagingBuffer.m_memory);
+    stagingBuffer.mapAndWrite(sourceData, size);
+    this->copyFromBuffer(&stagingBuffer);
+}
 
-    this->copyFromBuffer(&stagingBuffer, size);
+void GpuBuffer::mapAndWrite(const void* data, VkDeviceSize size) {
+    void* mappedData;
+    vkMapMemory(m_deviceCtx.m_logicalDevice, m_memory, 0, size, 0, &mappedData);
+    memcpy(mappedData, data, (size_t)size);
+    vkUnmapMemory(m_deviceCtx.m_logicalDevice, m_memory);
 }
 
 void GpuBuffer::copyFromBuffer(GpuBuffer *srcBuffer) {
@@ -78,13 +85,6 @@ void GpuBuffer::copyFromBuffer(GpuBuffer *srcBuffer, VkDeviceSize size) {
         queueCtx.mainCmdPool,
         queueCtx.queue
     );
-}
-
-void GpuBuffer::mapAndWrite(const void* data, VkDeviceSize size) {
-    void* mappedData;
-    vkMapMemory(m_deviceCtx.m_logicalDevice, m_memory, 0, size, 0, &mappedData);
-    memcpy(mappedData, data, (size_t)size);
-    vkUnmapMemory(m_deviceCtx.m_logicalDevice, m_memory);
 }
 
 uint32_t GpuBuffer::findSuitableMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
