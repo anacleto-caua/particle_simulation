@@ -41,6 +41,8 @@ public:
     
     SwapChainSupportDetails querySwapChainSupport(VkSurfaceKHR surface);
     VkSampleCountFlagBits getMaxUsableSampleCount();
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
     // TOFIX: Somehow I doubt this is right
     void executeCommand(std::function<void(VkCommandBuffer)> recorder, VkCommandPool cmdPool, VkQueue queue);
     // TODO: That's a temporary overwrite before a proper migration
