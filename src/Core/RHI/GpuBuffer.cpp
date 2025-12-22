@@ -8,7 +8,7 @@ GpuBuffer::GpuBuffer(
     VkBufferUsageFlags usage,
     VkMemoryPropertyFlags properties,
     QueueContext& queue
-) : m_deviceCtx(deviceCtx), m_size(size), queueCtx(queue) {
+) : m_deviceCtx(deviceCtx), m_size(size), m_queueCtx(queue) {
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = size;
@@ -49,7 +49,7 @@ void GpuBuffer::copyFromCpu(const void *sourceData, size_t size) {
         size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        queueCtx
+        m_queueCtx
     );
 
     stagingBuffer.mapAndWrite(sourceData, size);
@@ -81,8 +81,7 @@ void GpuBuffer::copyFromBuffer(GpuBuffer *srcBuffer, VkDeviceSize size) {
                 &copyRegion
             );
         },
-        queueCtx.mainCmdPool,
-        queueCtx.queue
+        m_queueCtx
     );
 }
 

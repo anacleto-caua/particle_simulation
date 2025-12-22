@@ -22,7 +22,7 @@ public:
 
     VkBuffer m_vkBuffer;
 
-    QueueContext& queueCtx;
+    QueueContext& m_queueCtx;
 
 private:
     DeviceContext& m_deviceCtx;
