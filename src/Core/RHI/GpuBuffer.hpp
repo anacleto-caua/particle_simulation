@@ -32,6 +32,4 @@ private:
     
     VkDeviceMemory m_memory;
     VkDeviceSize m_size;
-
-    uint32_t findSuitableMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 };
