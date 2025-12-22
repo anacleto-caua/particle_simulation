@@ -85,6 +85,39 @@ void GpuBuffer::copyFromBuffer(GpuBuffer *srcBuffer, VkDeviceSize size) {
     );
 }
 
+void GpuBuffer::copyBufferToImage(Image &image) {
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+
+    region.imageOffset = { 0, 0, 0 };
+    region.imageExtent = {
+        image.m_width,
+        image.m_height,
+        1
+    };
+
+    m_deviceCtx.executeCommand(
+        [&](VkCommandBuffer cmd) {
+            vkCmdCopyBufferToImage(
+                cmd,
+                m_vkBuffer,
+                image.m_image,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1,
+                &region
+            );
+        },
+        m_queueCtx
+    );
+}
+
 uint32_t GpuBuffer::findSuitableMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
     VkPhysicalDeviceMemoryProperties memProperties;
     vkGetPhysicalDeviceMemoryProperties(m_deviceCtx.m_physicalDevice, &memProperties);

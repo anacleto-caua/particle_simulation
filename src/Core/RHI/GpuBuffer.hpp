@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 #include "./DeviceContext.hpp"
 #include "./Types/AppTypes.hpp"
+#include "../Resources/Image.hpp"
 
 class GpuBuffer {
 public:
@@ -19,6 +20,8 @@ public:
 
     void copyFromBuffer(GpuBuffer *srcBuffer);
     void copyFromBuffer(GpuBuffer *srcBuffer, VkDeviceSize size);
+
+    void copyBufferToImage(Image &image);
 
     VkBuffer m_vkBuffer;
 
