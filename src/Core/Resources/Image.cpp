@@ -51,6 +51,21 @@ Image::Image(
     }
 
     vkBindImageMemory(m_deviceCtx->m_logicalDevice, m_vkImage, m_imageMemory, 0);
+
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = m_vkImage;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = format;
+    viewInfo.subresourceRange.aspectMask = aspectFlags;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = mipLevels;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    if (vkCreateImageView(m_deviceCtx->m_logicalDevice, &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create image view!");
+    }
 }
 
 Image::Image(Image&& other) noexcept : m_deviceCtx(other.m_deviceCtx) {
