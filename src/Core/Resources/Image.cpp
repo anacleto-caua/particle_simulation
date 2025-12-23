@@ -2,7 +2,7 @@
 #include <stdexcept>
 
 Image::Image(
-    DeviceContext& deviceCtx, 
+    DeviceContext *deviceCtx, 
     uint32_t width,
     uint32_t height,
     uint32_t mipLevels,
@@ -13,6 +13,7 @@ Image::Image(
     VkMemoryPropertyFlags properties,
     VkImageAspectFlags aspectFlags)
 {
+    m_deviceCtx = deviceCtx;
     m_width = width;
     m_height = height;
     m_mipLevels = mipLevels;
