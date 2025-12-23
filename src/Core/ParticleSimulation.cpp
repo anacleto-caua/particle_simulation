@@ -24,6 +24,7 @@
 #include "RHI/PipelineBuilder.hpp"
 #include "RHI/DeviceContext.hpp"
 #include "RHI/Types/Vertex.hpp"
+#include "Resources/Texture.hpp"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -109,9 +110,8 @@ class ParticleSimulation {
     std::vector<std::unique_ptr<GpuBuffer>> m_uniformBuffers;
 
     uint32_t mipLevels;
-    VkImage textureImage;
-    VkDeviceMemory textureImageMemory;
-    VkImageView textureImageView;
+    
+    std::unique_ptr<Texture> m_texture;
 
     VkImage depthImage;
     VkDeviceMemory depthImageMemory;
@@ -164,8 +164,10 @@ class ParticleSimulation {
         createColorResources();
         createDepthResources();
         createFramebuffers();
-        createTextureImage();
-        createTextureImageView();
+
+        m_texture = std::make_unique<Texture>(*m_deviceCtx, TEXTURE_PATH);
+        m_texture->generateMipmaps();
+
         loadModel();
         createVertexBuffer();
         createIndexBuffer();
@@ -182,9 +184,7 @@ class ParticleSimulation {
 
         cleanupSwapChain();
 
-        vkDestroyImageView(device, textureImageView, nullptr);
-        vkDestroyImage(device, textureImage, nullptr);
-        vkFreeMemory(device, textureImageMemory, nullptr);
+        m_texture.reset();
 
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
@@ -833,177 +833,6 @@ class ParticleSimulation {
         return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
     }
 
-    void createTextureImage() {
-        int texWidth, texHeight, texChannels;
-        stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-
-        mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
-
-        VkDeviceSize imageSize = texWidth * texHeight * 4;
-
-        if (!pixels) {
-            throw std::runtime_error("failed to load texture image!");
-        }
-
-        GpuBuffer stagingBuffer = GpuBuffer(
-            *m_deviceCtx,
-            imageSize,
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            m_deviceCtx->m_transferQueueCtx
-        );
-
-        stagingBuffer.copyFromCpu(pixels, imageSize);
-        stbi_image_free(pixels);
-
-        uint32_t transferFamily = m_deviceCtx->m_queueIndices.transferFamily.value();
-        uint32_t graphicsFamily = m_deviceCtx->m_queueIndices.graphicsFamily.value();
-
-        createImage(
-            texWidth,
-            texHeight,
-            mipLevels,
-            VK_SAMPLE_COUNT_1_BIT,
-            VK_FORMAT_R8G8B8A8_SRGB,
-            VK_IMAGE_TILING_OPTIMAL,
-            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            textureImage,
-            textureImageMemory
-        );
-
-        copyBufferToImage(stagingBuffer.m_vkBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-
-        // Transition the layout from undefined
-        {
-            VkImageMemoryBarrier barrier{};
-            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-
-            // We are NOT transferring ownership yet, just changing layout.
-            // So we keep it ignored (which implies "same queue family").
-            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-
-            barrier.image = textureImage;
-            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            barrier.subresourceRange.baseMipLevel = 0;
-            barrier.subresourceRange.levelCount = 1;
-            barrier.subresourceRange.baseArrayLayer = 0;
-            barrier.subresourceRange.layerCount = 1;
-
-            barrier.srcAccessMask = 0;
-            barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-            m_deviceCtx->executeCommand(
-                [&](VkCommandBuffer cmd){
-                    vkCmdPipelineBarrier(
-                        cmd,
-                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        0,
-                        0, nullptr,
-                        0, nullptr,
-                        1, &barrier
-                    );
-                },
-                m_deviceCtx->m_transferCmdPool,
-                m_deviceCtx->m_transferQueue
-            );
-        }
-
-        // PART A: Release from Transfer Queue
-        // We use the Transfer Pool and Transfer Queue here
-        {
-            VkImageMemoryBarrier barrier{};
-            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-            // This transfers ownership:
-            barrier.srcQueueFamilyIndex = transferFamily;
-            barrier.dstQueueFamilyIndex = graphicsFamily;
-
-            barrier.image = textureImage;
-            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            barrier.subresourceRange.baseMipLevel = 0;
-            barrier.subresourceRange.levelCount = 1;
-            barrier.subresourceRange.baseArrayLayer = 0;
-            barrier.subresourceRange.layerCount = 1;
-
-            // RELEASE BARRIER RULES:
-            // 1. Src Access: What we just did (Transfer Write)
-            // 2. Dst Access: 0 (Ignored during release)
-            // 3. Dst Stage: Bottom of Pipe (Finish all transfer work)
-            barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            barrier.dstAccessMask = 0;
-
-            m_deviceCtx->executeCommand(
-                [&](VkCommandBuffer cmd){
-                    vkCmdPipelineBarrier(
-                        cmd,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                        0,
-                        0, nullptr,
-                        0, nullptr,
-                        1, &barrier
-                    );
-                },
-                m_deviceCtx->m_transferCmdPool,
-                m_deviceCtx->m_transferQueue
-            );
-        }
-
-        // PART B: Acquire on Graphics Queue
-        // We use the Graphics Pool and Graphics Queue here
-        {
-            VkImageMemoryBarrier barrier{};
-            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-            // Indices must match the release exactly
-            barrier.srcQueueFamilyIndex = transferFamily;
-            barrier.dstQueueFamilyIndex = graphicsFamily;
-
-            barrier.image = textureImage;
-            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            barrier.subresourceRange.baseMipLevel = 0;
-            barrier.subresourceRange.levelCount = 1;
-            barrier.subresourceRange.baseArrayLayer = 0;
-            barrier.subresourceRange.layerCount = 1;
-
-            // ACQUIRE BARRIER RULES:
-            // 1. Src Access: 0 (Ignored during acquire)
-            // 2. Dst Access: What we want to do next (Shader Read)
-            // 3. Src Stage: Top of Pipe (Wait for release to become visible)
-            barrier.srcAccessMask = 0;
-            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-            m_deviceCtx->executeCommand(
-                [&](VkCommandBuffer cmd){
-                    vkCmdPipelineBarrier(
-                        cmd,
-                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                        0,
-                        0, nullptr,
-                        0, nullptr,
-                        1, &barrier
-                    );
-                },
-                m_deviceCtx->m_graphicsCmdPool,
-                m_deviceCtx->m_graphicsQueue
-            );
-        }
-
-        generateMipmaps(textureImage, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, mipLevels);
-    }
-
-    void createTextureImageView() {
-        textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
-    }
-
     VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels) {
         VkImageViewCreateInfo viewInfo{};
         viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1516,7 +1345,7 @@ class ParticleSimulation {
             
             VkDescriptorImageInfo imageInfo{};
             imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            imageInfo.imageView = textureImageView;
+            imageInfo.imageView = m_texture->m_image->m_imageView;
             imageInfo.sampler = m_deviceCtx->m_textureSampler;
 
             VkWriteDescriptorSet descriptorWrite{};
