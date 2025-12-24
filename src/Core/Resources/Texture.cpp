@@ -3,6 +3,8 @@
 #include <stb_image.h>
 #include <stdexcept>
 #include "Core/RHI/GpuBuffer.hpp"
+#include "Core/RHI/Types/AppTypes.hpp"
+#include "Image.hpp"
 
 Texture::Texture(
     DeviceContext &deviceCtx,
@@ -47,126 +49,35 @@ Texture::Texture(
     );
 
     stagingBuffer.copyBufferToImage(*m_image);
-
+    
     // Transition the layout from undefined
-    {
-        VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    m_image->memoryBarrier(BarrierBuilder::transitLayout(
+        m_deviceCtx.m_transferQueueCtx,
+        m_image->m_vkImage,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        0,VK_ACCESS_TRANSFER_WRITE_BIT)
+        .stages(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT)
+    );
 
-        // We are NOT transferring ownership yet, just changing layout.
-        // So we keep it ignored (which implies "same queue family").
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    // Release from Transfer Queue
+    m_image->memoryBarrier(BarrierBuilder::transitLayout(
+        m_deviceCtx.m_transferQueueCtx,
+        m_image->m_vkImage,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_ACCESS_TRANSFER_WRITE_BIT,0)
+        .queues(m_deviceCtx.m_transferQueueCtx,m_deviceCtx.m_graphicsQueueCtx)
+        .stages(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
+    );
 
-        barrier.image = m_image->m_vkImage;;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-        m_deviceCtx.executeCommand(
-            [&](VkCommandBuffer cmd){
-                vkCmdPipelineBarrier(
-                    cmd,
-                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                    VK_PIPELINE_STAGE_TRANSFER_BIT,
-                    0,
-                    0, nullptr,
-                    0, nullptr,
-                    1, &barrier
-                );
-            },
-            m_deviceCtx.m_transferQueueCtx
-        );
-    }
-
-    // PART A: Release from Transfer Queue
-    // We use the Transfer Pool and Transfer Queue here
-    {
-        VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-        // This transfers ownership:
-        barrier.srcQueueFamilyIndex = m_deviceCtx.m_transferQueueCtx.queueFamilyIndex;
-        barrier.dstQueueFamilyIndex = m_deviceCtx.m_graphicsQueueCtx.queueFamilyIndex;
-
-        barrier.image = m_image->m_vkImage;;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-
-        // RELEASE BARRIER RULES:
-        // 1. Src Access: What we just did (Transfer Write)
-        // 2. Dst Access: 0 (Ignored during release)
-        // 3. Dst Stage: Bottom of Pipe (Finish all transfer work)
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = 0;
-
-        m_deviceCtx.executeCommand(
-            [&](VkCommandBuffer cmd){
-                vkCmdPipelineBarrier(
-                    cmd,
-                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                    0,
-                    0, nullptr,
-                    0, nullptr,
-                    1, &barrier
-                );
-            },
-            m_deviceCtx.m_transferQueueCtx
-        );
-    }
-
-    // PART B: Acquire on Graphics Queue
-    // We use the Graphics Pool and Graphics Queue here
-    {
-        VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-        // Indices must match the release exactly
-        barrier.srcQueueFamilyIndex = m_deviceCtx.m_transferQueueCtx.queueFamilyIndex;
-        barrier.dstQueueFamilyIndex = m_deviceCtx.m_graphicsQueueCtx.queueFamilyIndex;
-
-        barrier.image = m_image->m_vkImage;;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-
-        // ACQUIRE BARRIER RULES:
-        // 1. Src Access: 0 (Ignored during acquire)
-        // 2. Dst Access: What we want to do next (Shader Read)
-        // 3. Src Stage: Top of Pipe (Wait for release to become visible)
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-        m_deviceCtx.executeCommand(
-            [&](VkCommandBuffer cmd){
-                vkCmdPipelineBarrier(
-                    cmd,
-                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                    0,
-                    0, nullptr,
-                    0, nullptr,
-                    1, &barrier
-                );
-            },
-            m_deviceCtx.m_graphicsQueueCtx
-        );
-    }
+    // Acquire on Graphics Queue
+    m_image->memoryBarrier(BarrierBuilder::transitLayout(
+        m_deviceCtx.m_graphicsQueueCtx,
+        m_image->m_vkImage,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        0, VK_ACCESS_SHADER_READ_BIT)
+        .queues(m_deviceCtx.m_transferQueueCtx,m_deviceCtx.m_graphicsQueueCtx)
+        .stages(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
+    );
 }
 
 Texture::~Texture() { }
