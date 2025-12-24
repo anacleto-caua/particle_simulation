@@ -96,16 +96,6 @@ void Texture::generateMipmaps() {
 }
 
 void Texture::recordGenerateMipmapsCmd(VkCommandBuffer cmd) {
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.image = m_image->m_vkImage;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
-    barrier.subresourceRange.levelCount = 1;
-
     BarrierBuilder baseBarrierBuilder = BarrierBuilder::transitLayout(
         m_deviceCtx.m_graphicsQueueCtx, 
         m_image->m_vkImage,
