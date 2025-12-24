@@ -47,26 +47,29 @@ Texture::Texture(
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT
     );
-
-    stagingBuffer.copyBufferToImage(*m_image);
     
     // Transition the layout from undefined
     m_image->memoryBarrier(BarrierBuilder::transitLayout(
         m_deviceCtx.m_transferQueueCtx,
         m_image->m_vkImage,
-        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         0,VK_ACCESS_TRANSFER_WRITE_BIT)
         .stages(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT)
+        .levelCount(mipLevels)
     );
 
+    stagingBuffer.copyBufferToImage(*m_image);
+    
     // Release from Transfer Queue
     m_image->memoryBarrier(BarrierBuilder::transitLayout(
         m_deviceCtx.m_transferQueueCtx,
         m_image->m_vkImage,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_ACCESS_TRANSFER_WRITE_BIT,0)
         .queues(m_deviceCtx.m_transferQueueCtx,m_deviceCtx.m_graphicsQueueCtx)
         .stages(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
+        .levelCount(mipLevels)
+
     );
 
     // Acquire on Graphics Queue
@@ -77,6 +80,7 @@ Texture::Texture(
         0, VK_ACCESS_SHADER_READ_BIT)
         .queues(m_deviceCtx.m_transferQueueCtx,m_deviceCtx.m_graphicsQueueCtx)
         .stages(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
+        .levelCount(mipLevels)
     );
 }
 
@@ -102,22 +106,21 @@ void Texture::recordGenerateMipmapsCmd(VkCommandBuffer cmd) {
     barrier.subresourceRange.layerCount = 1;
     barrier.subresourceRange.levelCount = 1;
 
+    BarrierBuilder baseBarrierBuilder = BarrierBuilder::transitLayout(
+        m_deviceCtx.m_graphicsQueueCtx, 
+        m_image->m_vkImage,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT
+    );
 
     int32_t mipWidth = m_image->m_width;
     int32_t mipHeight = m_image->m_height;
 
     for (uint32_t i = 1; i < m_image->m_mipLevels; i++) {
-        barrier.subresourceRange.baseMipLevel = i - 1;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-
-        vkCmdPipelineBarrier(cmd,
-            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-            0, nullptr,
-            0, nullptr,
-            1, &barrier);
+        baseBarrierBuilder.baseMipLevel(i - 1)
+            .layouts(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+            .accessMasks(VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT);
+        m_image->memoryBarrier(baseBarrierBuilder, cmd);
         
         VkImageBlit blit{};
         blit.srcOffsets[0] = { 0, 0, 0 };
@@ -139,30 +142,16 @@ void Texture::recordGenerateMipmapsCmd(VkCommandBuffer cmd) {
             1, &blit,
             VK_FILTER_LINEAR);
 
-        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-        vkCmdPipelineBarrier(cmd,
-            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-            0, nullptr,
-            0, nullptr,
-            1, &barrier);
+        baseBarrierBuilder.layouts(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            .accessMasks(VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_READ_BIT);
+        m_image->memoryBarrier(baseBarrierBuilder, cmd);
 
         if (mipWidth > 1) mipWidth /= 2;
         if (mipHeight > 1) mipHeight /= 2;
     }
 
-    barrier.subresourceRange.baseMipLevel = m_image->m_mipLevels - 1;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-    vkCmdPipelineBarrier(cmd,
-        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-        0, nullptr,
-        0, nullptr,
-        1, &barrier);
+    baseBarrierBuilder.baseMipLevel(m_image->m_mipLevels - 1)
+        .layouts(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+        .accessMasks(VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+    m_image->memoryBarrier(baseBarrierBuilder, cmd);
 }
