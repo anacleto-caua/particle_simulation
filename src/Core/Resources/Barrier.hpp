@@ -36,7 +36,7 @@ public:
         return builder;
     }
 
-    BarrierBuilder& queues(QueueContext& srcQueueCtx, QueueContext& dstQueueCtx) {
+    BarrierBuilder& queues(const QueueContext &srcQueueCtx, const QueueContext &dstQueueCtx) {
         config.srcQueueFamily = srcQueueCtx.queueFamilyIndex;
         config.dstQueueFamily = dstQueueCtx.queueFamilyIndex;
         return *this;
