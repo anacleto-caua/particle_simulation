@@ -133,7 +133,7 @@ void Image::memoryBarrier(const BarrierBuilder& builder, VkCommandBuffer& comman
     barrier.srcQueueFamilyIndex = cfg.srcQueueFamily;
     barrier.dstQueueFamilyIndex = cfg.dstQueueFamily;
 
-    barrier.image = cfg.image;
+    barrier.image = m_vkImage;
 
     barrier.srcAccessMask = cfg.srcAccessMask;
     barrier.dstAccessMask = cfg.dstAccessMask;

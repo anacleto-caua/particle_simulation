@@ -8,8 +8,6 @@ struct BarrierConfig {
     
     uint32_t srcQueueFamily = VK_QUEUE_FAMILY_IGNORED; 
     uint32_t dstQueueFamily = VK_QUEUE_FAMILY_IGNORED; 
-    
-    VkImage image = VK_NULL_HANDLE;
 
     VkAccessFlags srcAccessMask = 0;
     VkAccessFlags dstAccessMask = 0;
@@ -30,9 +28,8 @@ class BarrierBuilder {
 public:
     BarrierConfig config;
 
-    static BarrierBuilder transitLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask) {
+    static BarrierBuilder transitLayout(VkImageLayout oldLayout, VkImageLayout newLayout, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask) {
         BarrierBuilder builder;
-        builder.config.image = image;
         builder.config.oldLayout = oldLayout;
         builder.config.newLayout = newLayout;
         builder.config.srcAccessMask = srcAccessMask;
@@ -78,11 +75,6 @@ public:
     }
 
     // Rewrites
-    BarrierBuilder& vkImage(VkImage image) {
-        config.image = image;
-        return *this;
-    }
-
     BarrierBuilder& layouts(VkImageLayout oldLayout, VkImageLayout newLayout) {
         config.oldLayout = oldLayout;
         config.newLayout = newLayout;

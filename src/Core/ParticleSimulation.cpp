@@ -793,7 +793,6 @@ class ParticleSimulation {
         
         m_depthImage->memoryBarrier(
             BarrierBuilder::transitLayout(
-                m_depthImage->m_vkImage,
                 VK_IMAGE_LAYOUT_UNDEFINED,
                 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                 0,

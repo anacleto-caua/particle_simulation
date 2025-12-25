@@ -50,7 +50,6 @@ Texture::Texture(
 
     // Transition the layout from undefined
     m_image->memoryBarrier(BarrierBuilder::transitLayout(
-        m_image->m_vkImage,
         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         0,VK_ACCESS_TRANSFER_WRITE_BIT)
         .stages(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT)
@@ -65,7 +64,6 @@ Texture::Texture(
     
     // Release from Transfer Queue
     m_image->memoryBarrier(BarrierBuilder::transitLayout(
-        m_image->m_vkImage,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_ACCESS_TRANSFER_WRITE_BIT,0)
         .queues(m_deviceCtx.m_transferQueueCtx,m_deviceCtx.m_graphicsQueueCtx)
@@ -76,7 +74,6 @@ Texture::Texture(
 
     // Acquire on Graphics Queue
     m_image->memoryBarrier(BarrierBuilder::transitLayout(
-        m_image->m_vkImage,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         0, VK_ACCESS_SHADER_READ_BIT)
         .queues(m_deviceCtx.m_transferQueueCtx,m_deviceCtx.m_graphicsQueueCtx)
@@ -99,7 +96,6 @@ void Texture::generateMipmaps() {
 
 void Texture::recordGenerateMipmapsCmd(VkCommandBuffer cmd) {
     BarrierBuilder baseBarrierBuilder = BarrierBuilder::transitLayout(
-        m_image->m_vkImage,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT
     );
