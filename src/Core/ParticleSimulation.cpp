@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -13,7 +14,6 @@
 #include <chrono>
 
 #include <vulkan/vulkan_core.h>
-#include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/hash.hpp>
@@ -24,6 +24,8 @@
 #include "RHI/PipelineBuilder.hpp"
 #include "RHI/DeviceContext.hpp"
 #include "RHI/Types/Vertex.hpp"
+#include "RHI/Window/WindowContext.hpp"
+#include "RHI/Window/GlfwWindowContext.hpp"
 #include "Resources/Image.hpp"
 #include "Resources/Texture.hpp"
 
@@ -75,7 +77,7 @@ class ParticleSimulation {
     }
 
   private:
-    GLFWwindow *window;
+    std::unique_ptr<WindowContext> m_windowCtx;
     VkInstance instance;
 
     VkDebugUtilsMessengerEXT debugMessenger;
@@ -128,26 +130,25 @@ class ParticleSimulation {
     std::unique_ptr<DeviceContext> m_deviceCtx;
 
     void initWindow() {
-        glfwInit();
-
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-
-        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
-        glfwSetWindowUserPointer(window, this);
-        glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+        m_windowCtx = std::make_unique<GlfwWindowContext>(
+            WIDTH, HEIGHT, 
+            "Particles!", 
+            [this](int w, int h) { framebufferResizeCallback(w,  h); }
+        );
     }
 
-    static void framebufferResizeCallback(GLFWwindow *window, int width, int height) {
-        auto app = reinterpret_cast<ParticleSimulation*>(glfwGetWindowUserPointer(window));
-        app->framebufferResized = true;
+    void framebufferResizeCallback(int w, int h) {
+        framebufferResized = true;
+        std::cout << "Resized to { width: " << w << ", height:" << h << " } \n";
     }
 
     void initVulkan() {
+        
         createInstance();
         setupDebugMessenger();
-        createSurface();
-
+  
+        m_windowCtx->createSurface(instance, surface);
+  
         m_deviceCtx = std::make_unique<DeviceContext>(instance, surface, deviceExtensions, enableValidationLayers, validationLayers);
 
         // TODO: FOR NOW
@@ -213,8 +214,7 @@ class ParticleSimulation {
         }
         
         vkDestroyInstance(instance, nullptr);
-        glfwDestroyWindow(window);
-        glfwTerminate();
+        m_windowCtx.reset();
     }
 
     void createInstance() {
@@ -261,11 +261,8 @@ class ParticleSimulation {
     }
 
     std::vector<const char*> getRequiredVkInstanceExtensions() {
-        uint32_t glfwExtensionCount = 0;
-        const char **glfwExtensions;
-        glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-        std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+        std::vector<const char*> extensions = m_windowCtx->getRequiredExtensions();
 
         extensions.insert(extensions.end(), instanceExtensions.begin(), instanceExtensions.end());
 
@@ -379,13 +376,6 @@ class ParticleSimulation {
         }
     }
 
-    void createSurface() {
-        if (glfwCreateWindowSurface(instance, window, nullptr, &surface) !=
-            VK_SUCCESS) {
-            throw std::runtime_error("failed to create window surface!");
-        }
-    }
-
     void createSwapChain() {
         SwapChainSupportDetails swapChainSupport = m_deviceCtx->querySwapChainSupport(surface);
 
@@ -490,17 +480,13 @@ class ParticleSimulation {
     }
 
     VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
-
         if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
             return capabilities.currentExtent;
         } else {
-            int width, height;
-            glfwGetFramebufferSize(window, &width, &height);
+            uint32_t width, height;
+            m_windowCtx->getFramebufferSize(width, height);
 
-            VkExtent2D actualExtent = {
-                static_cast<uint32_t>(width),
-                static_cast<uint32_t>(height)
-            };
+            VkExtent2D actualExtent = { width,height };
 
             actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
             actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
@@ -541,11 +527,11 @@ class ParticleSimulation {
 
     void recreateSwapChain() {
         // Handles minimization
-        int width = 0, height = 0;
-        glfwGetFramebufferSize(window, &width, &height);
-        while (width == 0 || height == 0) {
-            glfwGetFramebufferSize(window, &width, &height);
-            glfwWaitEvents();
+        uint32_t width = 0, height = 0;
+        m_windowCtx->getFramebufferSize(width, height);
+        while (width == 0 || height == 0) { // TODO: Try a do while here
+            m_windowCtx->getFramebufferSize(width, height);
+            m_windowCtx->waitEvents();
         }
 
         // We shouldn't touch resources that may still be in use.
@@ -1245,8 +1231,8 @@ class ParticleSimulation {
     }
 
     void mainLoop() {
-        while (!glfwWindowShouldClose(window)) {
-            glfwPollEvents();
+        while (!m_windowCtx->shouldClose()) {
+            m_windowCtx->update();
             drawFrame();
         }
 
