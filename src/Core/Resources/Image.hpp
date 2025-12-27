@@ -35,6 +35,8 @@ public:
     uint32_t m_mipLevels, m_width, m_height;
     
     VkFormat m_format;
+
+    VkImageLayout m_layout;
     
     void memoryBarrier(const BarrierBuilder& builder, const QueueContext &execQueueCtx);
     void memoryBarrier(const BarrierBuilder& builder, VkCommandBuffer commandBuffer);

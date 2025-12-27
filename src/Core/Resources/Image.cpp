@@ -18,6 +18,7 @@ Image::Image(
     m_height = height;
     m_mipLevels = mipLevels;
     m_format = format;
+    m_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -119,6 +120,7 @@ void Image::memoryBarrier(const BarrierBuilder& builder, const QueueContext &exe
         [&](VkCommandBuffer cmd){ memoryBarrier(builder, cmd); },
         execQueueCtx
     );
+    m_layout = builder.config.newLayout;
 }
 
 void Image::memoryBarrier(const BarrierBuilder& builder, VkCommandBuffer commandBuffer) {
