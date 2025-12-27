@@ -148,7 +148,7 @@ void Image::memoryBarrier(const BarrierBuilder& builder, VkCommandBuffer command
 
     vkCmdPipelineBarrier(
         commandBuffer,
-        builder.config.srcStage, builder.config.dstStage,
+        cfg.srcStage, cfg.dstStage,
         0,
         0, nullptr,
         0, nullptr,
