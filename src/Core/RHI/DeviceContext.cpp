@@ -1,23 +1,33 @@
 #include "DeviceContext.hpp"
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <map>
 #include <set>
 #include <stdexcept>
-#include <vulkan/vulkan_core.h>
+#include "Types/QueueCriteria.hpp"
 
 DeviceContext::DeviceContext(VkInstance instance, VkSurfaceKHR surface, const std::vector<const char*> requiredDeviceExtensions, bool enableValidationLayers, std::vector<const char *> validationLayers) {
     m_requiredDeviceExtensions = requiredDeviceExtensions;
     pickPhysicalDevice(instance, surface);
-    m_queueIndices = findQueueFamilies(m_physicalDevice, surface);
+    
+    if (!findQueueFamilies(m_physicalDevice, surface, true)) {
+        throw std::runtime_error("Failed to find valid queues during initialization!");
+    }
+
+    std::cout << "Picked queues -v-\n";
+    std::cout << "Graphics queue index: " << m_graphicsQueueCtx.queueFamilyIndex << "\n";
+    std::cout << "Transfer queue index: " << m_transferQueueCtx.queueFamilyIndex << "\n";
+    std::cout << "Present queue index: " << m_presentQueueCtx.queueFamilyIndex << "\n";
+
     createLogicalDevice(surface, enableValidationLayers, validationLayers);
     createCommandPools();
     createTextureSampler();
 }
 
 DeviceContext::~DeviceContext() {
-    vkDestroyCommandPool(m_logicalDevice, m_graphicsCmdPool, nullptr);
-    vkDestroyCommandPool(m_logicalDevice, m_transferCmdPool, nullptr);
+    vkDestroyCommandPool(m_logicalDevice, m_graphicsQueueCtx.mainCmdPool, nullptr);
+    vkDestroyCommandPool(m_logicalDevice, m_transferQueueCtx.mainCmdPool, nullptr);
 
     vkDestroySampler(m_logicalDevice, m_textureSampler, nullptr);
     
@@ -84,7 +94,7 @@ int DeviceContext::rateDeviceSuitability(VkPhysicalDevice device) {
 }
 
 bool DeviceContext::isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface) {
-    bool areIndicesEnough = findQueueFamilies(device, surface).isComplete();
+    bool areIndicesEnough = findQueueFamilies(device, surface, false);
 
     bool areExtensionsSupported = checkDeviceExtensionSupport(device);
 
@@ -113,7 +123,7 @@ bool DeviceContext::checkDeviceExtensionSupport(VkPhysicalDevice device) {
         bool isExtAvailable = false;
         
         for (const auto &availableExtension : availableExtensions) {
-            if(std::strcmp(requiredExtension, availableExtension.extensionName)){
+            if(std::strcmp(requiredExtension, availableExtension.extensionName) == 0){
                 isExtAvailable = true;
                 break;
             }
@@ -154,83 +164,69 @@ SwapChainSupportDetails DeviceContext::querySwapChainSupport(VkPhysicalDevice de
     return details;
 }
 
-QueueFamilyIndices DeviceContext::findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
-    QueueFamilyIndices indices;
-
+bool DeviceContext::findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface, bool keepChoices) {
     uint32_t queueFamilyCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
-        nullptr);
-
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
-        queueFamilies.data());
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
-    int i = 0;
-    VkBool32 presentSupport = false;
-    for (const auto& queueFamily : queueFamilies) {
+    int32_t bestGraphicsQIndex = -1;
+    int32_t bestTransferQIndex = -1;
+    int32_t bestPresentQIndex = -1;
 
-        // Does the queue support surface presentation
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+    QueueCriteria baseCriteria =
+        QueueCriteria::startCriteria()
+            .desireExclusivenessAgainst(m_presentQueueCtx)
+            .desireExclusivenessAgainst(m_graphicsQueueCtx)
+            .desireExclusivenessAgainst(m_presentQueueCtx);
 
-        // If the queue is suitable for surface presentation
-        if (!(indices.presentFamily.has_value()) &&
-            (presentSupport)
-            ) {
-            indices.presentFamily = i;
-        }
-
-        // Picks a queue family with both graphics and compute capabilities
-        if (!(indices.graphicsFamily.has_value()) &&
-            (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
-            (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
-            ) {
-            indices.graphicsFamily = i;
-        }
-
-        // Picks a transfer exclusive queue
-        if (!(indices.transferFamily.has_value()) &&
-            (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) &&
-            !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
-            !(queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
-            ) {
-            indices.transferFamily = i;
-        }
-
-        if (indices.isComplete()) {
-            break;
-        }
-
-        i++;
+    bestPresentQIndex = 
+        QueueCriteria::startCriteria(baseCriteria)
+            .requireSurfaceSupport(m_physicalDevice, surface)
+            .evaluateQueues(queueFamilies);
+    if(keepChoices) {
+        m_presentQueueCtx.queueFamilyIndex = static_cast<uint32_t>(bestPresentQIndex);
     }
 
-    // If no dedicated transfer family was found pick the next best thing 
-    // loops from back to front as trying not to pick the same queues for present and graphics
-    if (!indices.transferFamily.has_value()) {
-        for (i = queueFamilies.size() - 1; i >= 0; i--) {
-            auto& queueFamily = queueFamilies.at(i);
-
-            if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) ||
-                (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
-                ) {
-                indices.transferFamily = i;
-                break;
-            }
-        }
+    bestGraphicsQIndex = 
+        QueueCriteria::startCriteria(baseCriteria)
+            .addRequiredFlags(VK_QUEUE_GRAPHICS_BIT)
+            // .addRequiredFlags(VK_QUEUE_COMPUTE_BIT)
+            .evaluateQueues(queueFamilies);
+    if(keepChoices) {
+        m_graphicsQueueCtx.queueFamilyIndex = static_cast<uint32_t>(bestGraphicsQIndex);
     }
 
-    if (!indices.isComplete()) {
-        throw std::runtime_error("couldn't find the necessary queue families");
+    bestTransferQIndex = 
+        QueueCriteria::startCriteria(baseCriteria)
+            .addRequiredFlags(VK_QUEUE_TRANSFER_BIT)
+            .addAvoidedFlags(VK_QUEUE_GRAPHICS_BIT)
+            .addAvoidedFlags(VK_QUEUE_COMPUTE_BIT)
+            .evaluateQueues(queueFamilies);
+    if(keepChoices) {
+        m_transferQueueCtx.queueFamilyIndex = static_cast<uint32_t>(bestTransferQIndex);
     }
 
-    return indices;
+    bool querySuccess = false;
+    if(
+        (
+            bestGraphicsQIndex != -1 &&
+            bestTransferQIndex != -1 &&
+            bestPresentQIndex != -1
+        ) 
+    ) {
+        querySuccess = true;
+    }
+
+    return querySuccess;
 }
 
 void DeviceContext::createLogicalDevice(VkSurfaceKHR surface, bool enableValidationLayers, std::vector<const char *> validationLayers) {
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
     std::set<uint32_t> uniqueQueueFamilies = {
-        m_queueIndices.graphicsFamily.value(),
-        m_queueIndices.presentFamily.value(),
-        m_queueIndices.transferFamily.value()
+        m_graphicsQueueCtx.queueFamilyIndex,
+        m_presentQueueCtx.queueFamilyIndex,
+        m_transferQueueCtx.queueFamilyIndex
     };
 
     float queuePriority = 1.0f;
@@ -269,39 +265,38 @@ void DeviceContext::createLogicalDevice(VkSurfaceKHR surface, bool enableValidat
         createInfo.enabledLayerCount = 0;
     }
 
+    std::cout << "Enabling " << m_requiredDeviceExtensions.size() << " extensions." << std::endl;
+    for(const auto* name : m_requiredDeviceExtensions) {
+        std::cout << " - " << name << std::endl;
+    }
+
     if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_logicalDevice) != VK_SUCCESS) {
         throw std::runtime_error("failed to create logical device!");
     }
 
-    vkGetDeviceQueue(m_logicalDevice, m_queueIndices.graphicsFamily.value(), 0, &m_graphicsQueue);
-    vkGetDeviceQueue(m_logicalDevice, m_queueIndices.transferFamily.value(), 0, &m_transferQueue);
-    vkGetDeviceQueue(m_logicalDevice, m_queueIndices.presentFamily.value(), 0, &m_presentQueue);
-    
-    m_graphicsQueueCtx = {m_graphicsQueue, m_queueIndices.graphicsFamily.value(), nullptr};
-    m_transferQueueCtx = {m_transferQueue, m_queueIndices.transferFamily.value(), nullptr};
-    m_presentQueueCtx = {m_presentQueue, m_queueIndices.presentFamily.value(), nullptr};
+    vkGetDeviceQueue(m_logicalDevice, m_graphicsQueueCtx.queueFamilyIndex, 0, &m_graphicsQueueCtx.queue);
+    vkGetDeviceQueue(m_logicalDevice, m_transferQueueCtx.queueFamilyIndex, 0, &m_transferQueueCtx.queue);
+    vkGetDeviceQueue(m_logicalDevice, m_presentQueueCtx.queueFamilyIndex, 0, &m_presentQueueCtx.queue);
 }
 
 void DeviceContext::createCommandPools() {
     VkCommandPoolCreateInfo poolInfoGraphics{};
     poolInfoGraphics.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     poolInfoGraphics.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfoGraphics.queueFamilyIndex = m_queueIndices.graphicsFamily.value();
+    poolInfoGraphics.queueFamilyIndex = m_graphicsQueueCtx.queueFamilyIndex;
 
-    if (vkCreateCommandPool(m_logicalDevice, &poolInfoGraphics, nullptr, &m_graphicsCmdPool) != VK_SUCCESS) {
+    if (vkCreateCommandPool(m_logicalDevice, &poolInfoGraphics, nullptr, &m_graphicsQueueCtx.mainCmdPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create graphics command pool!");
     }
-    m_graphicsQueueCtx.mainCmdPool = m_graphicsCmdPool;
 
     VkCommandPoolCreateInfo poolInfoTransfer{};
     poolInfoTransfer.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     poolInfoTransfer.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfoTransfer.queueFamilyIndex = m_queueIndices.transferFamily.value();
+    poolInfoTransfer.queueFamilyIndex = m_transferQueueCtx.queueFamilyIndex;
 
-    if (vkCreateCommandPool(m_logicalDevice, &poolInfoTransfer, nullptr, &m_transferCmdPool) != VK_SUCCESS) {
+    if (vkCreateCommandPool(m_logicalDevice, &poolInfoTransfer, nullptr, &m_transferQueueCtx.mainCmdPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create transfer command pool!");
     }
-    m_transferQueueCtx.mainCmdPool = m_transferCmdPool;
 }
 
 void DeviceContext::createTextureSampler() {

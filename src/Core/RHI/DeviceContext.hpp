@@ -2,7 +2,9 @@
 
 #include <vector>
 #include <vulkan/vulkan.h>
+
 #include <vulkan/vulkan_core.h>
+
 #include "Types/AppTypes.hpp"
 
 struct VulkanContext; 
@@ -19,19 +21,8 @@ public:
     VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
     VkDevice m_logicalDevice = VK_NULL_HANDLE;
 
-    //TODO: Maybe the transfer queue should be managed only under this class OR
-    //  maybe the queues shoulbe be managed inside this class implicitilly
-    VkQueue m_graphicsQueue;
-    VkQueue m_presentQueue;
-    VkQueue m_transferQueue;
-    
-    VkCommandPool m_graphicsCmdPool;
-    VkCommandPool m_transferCmdPool;
-
     VkSampler m_textureSampler;
     
-    QueueFamilyIndices m_queueIndices;
-
     // TODO: Make a proper migration from QueueFamilyIndices with the sparse VkCommandPool's and VkQueue's to use a single struct or object 
     QueueContext m_graphicsQueueCtx;
     QueueContext m_transferQueueCtx;
@@ -54,7 +45,7 @@ private:
     bool checkDeviceExtensionSupport(VkPhysicalDevice device);
     int rateDeviceSuitability(VkPhysicalDevice device);
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface);
-    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface);
+    bool findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface, bool keepChoices);
     void createLogicalDevice(VkSurfaceKHR surface, bool enableValidationLayers, std::vector<const char *> validationLayers);
     void createCommandPools();
     void createTextureSampler();

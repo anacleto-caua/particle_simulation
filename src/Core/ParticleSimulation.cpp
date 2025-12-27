@@ -414,9 +414,12 @@ class ParticleSimulation {
         swapChainImageFormat = surfaceFormat.format;
         swapChainExtent = extent;
 
-        uint32_t queueFamilyIndices[] = {m_deviceCtx->m_queueIndices.graphicsFamily.value(), m_deviceCtx->m_queueIndices.presentFamily.value()};
+        uint32_t queueFamilyIndices[] = {
+            m_deviceCtx->m_graphicsQueueCtx.queueFamilyIndex,
+            m_deviceCtx->m_presentQueueCtx.queueFamilyIndex
+        };
 
-        if (m_deviceCtx->m_queueIndices.graphicsFamily != m_deviceCtx->m_queueIndices.presentFamily) {
+        if (m_deviceCtx->m_graphicsQueueCtx.queueFamilyIndex != m_deviceCtx->m_presentQueueCtx.queueFamilyIndex) {
             /**
              * In -VK_SHARING_MODE_CONCURRENT-
              * Images can be used across multiple queue families
@@ -869,7 +872,7 @@ class ParticleSimulation {
 
         VkCommandBufferAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.commandPool = m_deviceCtx->m_graphicsCmdPool;
+        allocInfo.commandPool = m_deviceCtx->m_graphicsQueueCtx.mainCmdPool;
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         allocInfo.commandBufferCount = commandBuffers.size();
 
@@ -1181,7 +1184,7 @@ class ParticleSimulation {
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = signalSemaphores;
 
-        if (vkQueueSubmit(m_deviceCtx->m_graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
+        if (vkQueueSubmit(m_deviceCtx->m_graphicsQueueCtx.queue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
             throw std::runtime_error("failed to submit draw command buffer!");
         }
 
@@ -1195,7 +1198,7 @@ class ParticleSimulation {
         presentInfo.pImageIndices = &imageIndex;
         presentInfo.pResults = nullptr;
 
-        result = vkQueuePresentKHR(m_deviceCtx->m_presentQueue, &presentInfo);
+        result = vkQueuePresentKHR(m_deviceCtx->m_presentQueueCtx.queue, &presentInfo);
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
             framebufferResized = false;
