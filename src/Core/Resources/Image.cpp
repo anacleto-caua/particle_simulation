@@ -120,7 +120,6 @@ void Image::memoryBarrier(const BarrierBuilder& builder, const QueueContext &exe
         [&](VkCommandBuffer cmd){ memoryBarrier(builder, cmd); },
         execQueueCtx
     );
-    m_layout = builder.config.newLayout;
 }
 
 void Image::memoryBarrier(const BarrierBuilder& builder, VkCommandBuffer commandBuffer) {
@@ -154,4 +153,5 @@ void Image::memoryBarrier(const BarrierBuilder& builder, VkCommandBuffer command
         0, nullptr,
         1, &barrier
     );
+    m_layout = builder.config.newLayout;
 }
