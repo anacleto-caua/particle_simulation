@@ -34,7 +34,6 @@ void GlfwWindowContext::createSurface(VkInstance instance, VkSurfaceKHR &surface
 
 void GlfwWindowContext::waitEvents() {
     glfwWaitEvents();
-
 }
 
 bool GlfwWindowContext::shouldClose() {
@@ -45,10 +44,9 @@ void GlfwWindowContext::update() {
     glfwPollEvents();
 }
 
-// TODO: Looks wrong...
 void GlfwWindowContext::getFramebufferSize(uint32_t &width, uint32_t &height) {
     int c_width = 0, c_height = 0;
-    glfwGetFramebufferSize(m_glfwWindow, &c_width, &c_width);
+    glfwGetFramebufferSize(m_glfwWindow, &c_width, &c_height);
     width = static_cast<uint32_t>(c_width);
     height = static_cast<uint32_t>(c_height);
 }
