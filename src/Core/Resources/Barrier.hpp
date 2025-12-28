@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+
 #include "Core/RHI/Types/AppTypes.hpp"
 
 struct BarrierConfig {

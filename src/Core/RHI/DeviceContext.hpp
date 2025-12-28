@@ -1,11 +1,10 @@
 #pragma once
 
 #include <vector>
-#include <vulkan/vulkan.h>
 
 #include <vulkan/vulkan.h>
 
-#include "Types/AppTypes.hpp"
+#include "Core/RHI/Types/AppTypes.hpp"
 
 struct VulkanContext; 
 

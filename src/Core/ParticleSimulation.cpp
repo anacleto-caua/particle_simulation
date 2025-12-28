@@ -20,15 +20,15 @@
 #include <stb_image.h>
 #include <tiny_obj_loader.h>
 
-#include "Descriptor/DescriptorWriter.hpp"
-#include "RHI/GpuBuffer.hpp"
-#include "RHI/PipelineBuilder.hpp"
-#include "RHI/DeviceContext.hpp"
-#include "RHI/Types/Vertex.hpp"
-#include "RHI/Window/WindowContext.hpp"
-#include "RHI/Window/GlfwWindowContext.hpp"
-#include "Resources/Image.hpp"
-#include "Resources/Texture.hpp"
+#include "Core/Descriptor/DescriptorWriter.hpp"
+#include "Core/RHI/GpuBuffer.hpp"
+#include "Core/RHI/PipelineBuilder.hpp"
+#include "Core/RHI/DeviceContext.hpp"
+#include "Core/RHI/Types/Vertex.hpp"
+#include "Core/RHI/Window/WindowContext.hpp"
+#include "Core/RHI/Window/GlfwWindowContext.hpp"
+#include "Core/Resources/Image.hpp"
+#include "Core/Resources/Texture.hpp"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 

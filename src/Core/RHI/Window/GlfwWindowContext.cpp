@@ -1,5 +1,5 @@
 #include "GlfwWindowContext.hpp"
-#include <cstdint>
+
 #include <stdexcept>
 
 GlfwWindowContext::GlfwWindowContext(uint32_t width, uint32_t height, const std::string &title, ResizeCallback callback) : m_userResizeCallback(callback) {

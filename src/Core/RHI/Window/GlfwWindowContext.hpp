@@ -1,9 +1,11 @@
 #pragma  once
 
 #include "WindowContext.hpp"
+
 #include <vector>
 #include <string>
 #include <functional>
+
 #include <GLFW/glfw3.h>
 
 class GlfwWindowContext: public WindowContext {

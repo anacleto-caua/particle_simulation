@@ -1,10 +1,11 @@
 #pragma once
 
-#include "Core/RHI/Types/AppTypes.hpp"
 #include <vector>
-#include <cstdint>
 #include <algorithm>
+
 #include <vulkan/vulkan.h>
+
+#include "Core/RHI/Types/AppTypes.hpp"
 
 class QueueCriteria {
 private:

@@ -1,7 +1,9 @@
 #include "Texture.hpp"
-#include <cstdint>
-#include <stb_image.h>
+
 #include <stdexcept>
+
+#include <stb_image.h>
+
 #include "Core/RHI/GpuBuffer.hpp"
 #include "Image.hpp"
 

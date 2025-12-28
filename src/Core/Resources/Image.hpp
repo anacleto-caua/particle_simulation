@@ -1,9 +1,9 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
-#include "../RHI/DeviceContext.hpp"
-#include "Barrier.hpp"
 #include "Core/RHI/Types/AppTypes.hpp"
+#include "Core/RHI/DeviceContext.hpp"
+#include "Barrier.hpp"
 
 class Image {
 public:

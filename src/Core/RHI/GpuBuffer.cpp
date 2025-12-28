@@ -1,5 +1,4 @@
 #include "GpuBuffer.hpp"
-#include <cstddef>
 #include <stdexcept>
 
 GpuBuffer::GpuBuffer(

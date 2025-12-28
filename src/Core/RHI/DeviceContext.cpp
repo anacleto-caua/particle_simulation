@@ -1,11 +1,12 @@
 #include "DeviceContext.hpp"
-#include <cstdint>
+
+#include <set>
+#include <map>
 #include <cstring>
 #include <iostream>
-#include <map>
-#include <set>
 #include <stdexcept>
-#include "Types/QueueCriteria.hpp"
+
+#include "Core/RHI/Types/QueueCriteria.hpp"
 
 DeviceContext::DeviceContext(VkInstance instance, VkSurfaceKHR surface, const std::vector<const char*> requiredDeviceExtensions, bool enableValidationLayers, std::vector<const char *> validationLayers) {
     m_requiredDeviceExtensions = requiredDeviceExtensions;
