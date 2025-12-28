@@ -36,8 +36,6 @@ public:
     
     VkFormat m_format;
 
-    VkImageLayout m_layout;
-    
     void memoryBarrier(const BarrierBuilder& builder, const QueueContext &execQueueCtx);
     void memoryBarrier(const BarrierBuilder& builder, VkCommandBuffer commandBuffer);
     
