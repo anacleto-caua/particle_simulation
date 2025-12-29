@@ -22,7 +22,6 @@ public:
 
     VkSampler m_textureSampler;
     
-    // TODO: Make a proper migration from QueueFamilyIndices with the sparse VkCommandPool's and VkQueue's to use a single struct or object 
     QueueContext m_graphicsQueueCtx;
     QueueContext m_transferQueueCtx;
     QueueContext m_presentQueueCtx;
