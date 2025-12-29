@@ -187,8 +187,6 @@ class ParticleSimulation {
 
         m_texture.reset();
 
-        vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-
         m_vertexBuffer.reset();
         m_indexBuffer.reset();
 
