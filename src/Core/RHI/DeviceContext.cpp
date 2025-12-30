@@ -33,6 +33,7 @@ DeviceContext::DeviceContext(VkInstance instance, VkSurfaceKHR surface, const st
 DeviceContext::~DeviceContext() {
     vkDestroyCommandPool(m_logicalDevice, m_graphicsQueueCtx.mainCmdPool, nullptr);
     vkDestroyCommandPool(m_logicalDevice, m_transferQueueCtx.mainCmdPool, nullptr);
+    vkDestroyCommandPool(m_logicalDevice, m_computeQueueCtx.mainCmdPool, nullptr);
 
     vkDestroySampler(m_logicalDevice, m_textureSampler, nullptr);
     
@@ -287,6 +288,7 @@ void DeviceContext::createLogicalDevice(VkSurfaceKHR surface, bool enableValidat
 void DeviceContext::createCommandPools() {
     createMainCommandPool(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, m_graphicsQueueCtx);
     createMainCommandPool(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, m_transferQueueCtx);
+    createMainCommandPool(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, m_computeQueueCtx);
 }
 
 void DeviceContext::createMainCommandPool(const VkCommandPoolCreateFlags flags, QueueContext& queueCtx) {
