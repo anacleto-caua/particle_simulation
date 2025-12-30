@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include "Core/RHI/Types/AppTypes.hpp"
 #include "Core/RHI/Types/QueueCriteria.hpp"
 
 DeviceContext::DeviceContext(VkInstance instance, VkSurfaceKHR surface, const std::vector<const char*> requiredDeviceExtensions, bool enableValidationLayers, std::vector<const char *> validationLayers) {
@@ -228,7 +229,8 @@ void DeviceContext::createLogicalDevice(VkSurfaceKHR surface, bool enableValidat
     std::set<uint32_t> uniqueQueueFamilies = {
         m_graphicsQueueCtx.queueFamilyIndex,
         m_presentQueueCtx.queueFamilyIndex,
-        m_transferQueueCtx.queueFamilyIndex
+        m_transferQueueCtx.queueFamilyIndex,
+        m_computeQueueCtx.queueFamilyIndex
     };
 
     float queuePriority = 1.0f;
@@ -279,25 +281,22 @@ void DeviceContext::createLogicalDevice(VkSurfaceKHR surface, bool enableValidat
     vkGetDeviceQueue(m_logicalDevice, m_graphicsQueueCtx.queueFamilyIndex, 0, &m_graphicsQueueCtx.queue);
     vkGetDeviceQueue(m_logicalDevice, m_transferQueueCtx.queueFamilyIndex, 0, &m_transferQueueCtx.queue);
     vkGetDeviceQueue(m_logicalDevice, m_presentQueueCtx.queueFamilyIndex, 0, &m_presentQueueCtx.queue);
+    vkGetDeviceQueue(m_logicalDevice, m_computeQueueCtx.queueFamilyIndex, 0, &m_computeQueueCtx.queue);
 }
 
 void DeviceContext::createCommandPools() {
-    VkCommandPoolCreateInfo poolInfoGraphics{};
-    poolInfoGraphics.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfoGraphics.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfoGraphics.queueFamilyIndex = m_graphicsQueueCtx.queueFamilyIndex;
+    createMainCommandPool(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, m_graphicsQueueCtx);
+    createMainCommandPool(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, m_transferQueueCtx);
+}
 
-    if (vkCreateCommandPool(m_logicalDevice, &poolInfoGraphics, nullptr, &m_graphicsQueueCtx.mainCmdPool) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create graphics command pool!");
-    }
+void DeviceContext::createMainCommandPool(const VkCommandPoolCreateFlags flags, QueueContext& queueCtx) {
+    VkCommandPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.flags = flags;
+    poolInfo.queueFamilyIndex = queueCtx.queueFamilyIndex;
 
-    VkCommandPoolCreateInfo poolInfoTransfer{};
-    poolInfoTransfer.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfoTransfer.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfoTransfer.queueFamilyIndex = m_transferQueueCtx.queueFamilyIndex;
-
-    if (vkCreateCommandPool(m_logicalDevice, &poolInfoTransfer, nullptr, &m_transferQueueCtx.mainCmdPool) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create transfer command pool!");
+    if (vkCreateCommandPool(m_logicalDevice, &poolInfo, nullptr, &queueCtx.mainCmdPool) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create main command pool!");
     }
 }
 

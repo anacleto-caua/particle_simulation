@@ -22,10 +22,10 @@ public:
 
     VkSampler m_textureSampler;
     
-    QueueContext m_computeQueueCtx;
     QueueContext m_graphicsQueueCtx;
     QueueContext m_transferQueueCtx;
     QueueContext m_presentQueueCtx;
+    QueueContext m_computeQueueCtx;
 
     std::vector<const char*> m_requiredDeviceExtensions;
     
@@ -47,5 +47,6 @@ private:
     bool findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface, bool keepChoices);
     void createLogicalDevice(VkSurfaceKHR surface, bool enableValidationLayers, std::vector<const char *> validationLayers);
     void createCommandPools();
+    void createMainCommandPool(const VkCommandPoolCreateFlags flags, QueueContext& queueCtx);
     void createTextureSampler();
 };
