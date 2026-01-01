@@ -14,6 +14,8 @@ public:
     GpuBuffer(const GpuBuffer&) = delete;
     GpuBuffer& operator=(const GpuBuffer&) = delete;
 
+    void _rawCopyFromCpu(const void *sourceData, size_t size);
+
     void copyFromCpu(const void *sourceData);
     void copyFromCpu(const void *sourceData, size_t size);
 
@@ -34,4 +36,6 @@ private:
     DeviceContext& m_deviceCtx;
     
     VkDeviceMemory m_memory;
+
+    void* BufferPP;
 };

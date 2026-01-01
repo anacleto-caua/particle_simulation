@@ -1,7 +1,6 @@
 #include "PipelineBuilder.hpp"
 #include <stdexcept>
 #include <vector>
-#include <fstream>
 
 PipelineBuilder& PipelineBuilder::setDefaults() {
     m_dynamicStates = {
@@ -27,7 +26,7 @@ PipelineBuilder& PipelineBuilder::setDefaults() {
     // scissor.extent = swapChainExtent;
 
     m_inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    m_inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    m_inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
     m_inputAssembly.primitiveRestartEnable = VK_FALSE;
 
     m_rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -64,38 +63,8 @@ PipelineBuilder& PipelineBuilder::setDefaults() {
     return *this;
 }
 
-PipelineBuilder& PipelineBuilder::addShaderStage(const VkDevice &logicalDevice, VkShaderStageFlagBits stage, const std::string& filename) {
-    std::ifstream file(filename, std::ios::ate | std::ios::binary);
-    
-    if (!file.is_open()) {
-        throw std::runtime_error("failed to open file! " + filename);
-    }
-
-    size_t fileSize = (size_t)file.tellg();
-    std::vector<char> shaderCode(fileSize);
-
-    file.seekg(0);
-    file.read(shaderCode.data(), fileSize);
-    file.close();
-
-    VkShaderModuleCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    createInfo.codeSize = shaderCode.size();
-    createInfo.pCode = reinterpret_cast<const uint32_t*>(shaderCode.data());
-
-    VkShaderModule shaderModule;
-    if (vkCreateShaderModule(logicalDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create shader module!");
-    }
-
-    VkPipelineShaderStageCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    info.stage = stage;
-    info.module = shaderModule;
-    info.pName = "main";
-
+PipelineBuilder& PipelineBuilder::addShaderStage(VkPipelineShaderStageCreateInfo info) {
     m_shaderStages.push_back(info);
-
     return *this;
 }
 

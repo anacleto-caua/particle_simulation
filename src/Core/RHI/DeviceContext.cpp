@@ -176,12 +176,15 @@ bool DeviceContext::findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surf
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
     
+    // TODO: Temporary simplification of query selection
+
     QueueCriteria baseCriteria =
         QueueCriteria::startCriteria(nullptr)
-            .desireExclusivenessAgainst(&m_presentQueueCtx)
-            .desireExclusivenessAgainst(&m_graphicsQueueCtx)
-            .desireExclusivenessAgainst(&m_transferQueueCtx)
-            .desireExclusivenessAgainst(&m_computeQueueCtx);
+            // .desireExclusivenessAgainst(&m_presentQueueCtx)
+            // .desireExclusivenessAgainst(&m_graphicsQueueCtx)
+            // .desireExclusivenessAgainst(&m_transferQueueCtx)
+            // .desireExclusivenessAgainst(&m_computeQueueCtx)
+            ;
     
     QueueCriteria presentCriteria =
         QueueCriteria::startCriteria(baseCriteria, &m_presentQueueCtx)
@@ -194,14 +197,16 @@ bool DeviceContext::findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surf
     QueueCriteria transferCriteria =
         QueueCriteria::startCriteria(baseCriteria, &m_transferQueueCtx)
             .addRequiredFlags(VK_QUEUE_TRANSFER_BIT)
-            .addAvoidedFlags(VK_QUEUE_GRAPHICS_BIT)
-            .addAvoidedFlags(VK_QUEUE_COMPUTE_BIT);
+            // .addAvoidedFlags(VK_QUEUE_GRAPHICS_BIT)
+            // .addAvoidedFlags(VK_QUEUE_COMPUTE_BIT)
+            ;
 
     QueueCriteria computeCriteria =
         QueueCriteria::startCriteria(baseCriteria, &m_computeQueueCtx)
             .addRequiredFlags(VK_QUEUE_COMPUTE_BIT)
-            .addAvoidedFlags(VK_QUEUE_GRAPHICS_BIT)
-            .addAvoidedFlags(VK_QUEUE_TRANSFER_BIT);
+            // .addAvoidedFlags(VK_QUEUE_GRAPHICS_BIT)
+            // .addAvoidedFlags(VK_QUEUE_TRANSFER_BIT)
+            ;
 
     std::vector<QueueCriteria*> criterias = {
         &presentCriteria,

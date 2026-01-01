@@ -1,5 +1,6 @@
 #include "GlfwWindowContext.hpp"
 
+#include <GLFW/glfw3.h>
 #include <stdexcept>
 
 GlfwWindowContext::GlfwWindowContext(uint32_t width, uint32_t height, const std::string &title, ResizeCallback callback) : m_userResizeCallback(callback) {
@@ -58,4 +59,8 @@ void GlfwWindowContext::staticFramebufferResizeCallback(GLFWwindow* window, int 
 
 void GlfwWindowContext::onResize(int width, int height) {
     m_userResizeCallback(width, height);
+}
+
+double GlfwWindowContext::getTime() {
+    return glfwGetTime();
 }

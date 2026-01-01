@@ -20,4 +20,6 @@ public:
 
     virtual bool shouldClose() = 0;
 
+    virtual double getTime() = 0;
+
 };

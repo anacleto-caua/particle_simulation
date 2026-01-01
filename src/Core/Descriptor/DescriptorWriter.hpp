@@ -8,6 +8,20 @@
 
 class DescriptorWriter {
 public:
+    void addStorageBufferBinding(VkDescriptorSet& dstSet, const uint32_t dst, const GpuBuffer& buffer, const uint32_t count = 1) {
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = buffer.m_vkBuffer;
+        bufferInfo.offset = 0;
+        bufferInfo.range = buffer.m_size;
+
+        bufferInfos.push_back(bufferInfo);
+
+        VkWriteDescriptorSet descriptorConfig = addBinding(dstSet, dst, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, count);
+        descriptorConfig.pBufferInfo = &bufferInfos.back();
+
+        writeSets.push_back(descriptorConfig);
+    }
+
     void addUniformBufferBinding(VkDescriptorSet& dstSet, const uint32_t dst, const GpuBuffer& buffer, const uint32_t count = 1) {
         VkDescriptorBufferInfo bufferInfo{};
         bufferInfo.buffer = buffer.m_vkBuffer;

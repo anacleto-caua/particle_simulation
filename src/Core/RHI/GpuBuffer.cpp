@@ -38,6 +38,10 @@ GpuBuffer::~GpuBuffer() {
     vkFreeMemory(m_deviceCtx.m_logicalDevice, m_memory, nullptr);
 }
 
+void GpuBuffer::_rawCopyFromCpu(const void *sourceData, size_t size) {
+    memcpy(m_vkBuffer, &sourceData, size);
+}
+
 void GpuBuffer::copyFromCpu(const void *sourceData) {
     copyFromCpu(sourceData, m_size);
 }
@@ -53,6 +57,7 @@ void GpuBuffer::copyFromCpu(const void *sourceData, size_t size) {
 
     stagingBuffer.mapAndWrite(sourceData, size);
     this->copyFromBuffer(stagingBuffer);
+    vkQueueWaitIdle(m_queueCtx.queue);
 }
 
 void GpuBuffer::mapAndWrite(const void* data, VkDeviceSize size) {
