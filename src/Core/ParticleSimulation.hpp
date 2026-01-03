@@ -51,7 +51,21 @@ const uint32_t HEIGHT = 800;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-const uint32_t PARTICLE_COUNT = 8192;
+// const uint32_t PARTICLE_COUNT = 8192;
+// const uint32_t PARTICLE_COUNT = 16384;
+// const uint32_t PARTICLE_COUNT = 32768;
+// const uint32_t PARTICLE_COUNT = 32768;
+// const uint32_t PARTICLE_COUNT = 65536;
+// const uint32_t PARTICLE_COUNT = 131072;
+// const uint32_t PARTICLE_COUNT = 262144;
+// const uint32_t PARTICLE_COUNT = 524288;
+const uint32_t PARTICLE_COUNT = 1048576;
+// const uint32_t PARTICLE_COUNT = 2097152;
+// const uint32_t PARTICLE_COUNT = 4194304;
+// const uint32_t PARTICLE_COUNT = 8388608;
+// const uint32_t PARTICLE_COUNT = 16777216;
+// const uint32_t PARTICLE_COUNT = 33554432;
+// const uint32_t PARTICLE_COUNT = 67108864;
 
 class ParticleSimulation {
   public:
