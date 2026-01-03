@@ -1,0 +1,96 @@
+#version 450
+
+struct Particle {
+    vec2 position;
+    vec2 velocity;
+    vec4 color;
+};
+
+layout (binding = 0) uniform ParameterUBO {
+    float deltaTime;
+} ubo;
+
+layout(std140, binding = 1) readonly buffer ParticleSSBOIn {
+   Particle particlesIn[ ];
+};
+
+layout(std140, binding = 2) buffer ParticleSSBOOut {
+   Particle particlesOut[ ];
+};
+
+layout(binding = 3) uniform rngUbo {
+    float value;
+} rng;
+
+layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+float PI = 3.14159;
+
+float GRAVITY = 9.8 / 100000;
+float AIR_RESIST = .9;
+
+float RESET_SPEED_THRESHOLD = .002;
+float POP_STRENGTH = .005;
+
+float random(float n) {
+    return fract(sin(n) * 43758.5453123);
+}
+
+void main() 
+{
+    uint index = gl_GlobalInvocationID.x;
+
+    Particle particleIn = particlesIn[index];
+
+    vec2 newVelocity = particleIn.velocity.xy;
+    newVelocity.y += GRAVITY * ubo.deltaTime;
+    
+    vec2 newPosition = particleIn.position + (newVelocity * ubo.deltaTime);
+
+    if (newPosition.x <= -1.0) {
+        newPosition.x = -1.0;
+        newVelocity.x = -newVelocity.x * AIR_RESIST;
+    } else if (newPosition.x >= 1.0) {
+        newPosition.x = 1.0;
+        newVelocity.x = -newVelocity.x * AIR_RESIST;
+    }
+
+    if (newPosition.y <= -1.0) {
+        newPosition.y = -1.0;
+        newVelocity.y = -newVelocity.y * AIR_RESIST;
+    } else if (newPosition.y >= 1.0) {
+        newPosition.y = 1.0;
+        newVelocity.y = -newVelocity.y * AIR_RESIST;
+    }
+
+    if (newPosition.y >= 1.0) {
+        float currentSpeed = length(newVelocity);
+
+        // POP! (particles with low speed)
+        if (currentSpeed < RESET_SPEED_THRESHOLD) {
+            // Another hacky random because I forgot UBO share the same value for every particle...
+            float r1 = random(float(index) * rng.value);
+            float r2 = random(float(index) + rng.value);
+
+            // 3. Calculate Angle (Shoot mostly UP, but with spread)
+            // Map 0..1 to an angle between -PI/4 and PI/4 (cone upwards)
+            // Or -PI to PI for a full circle explosion.
+            float angle = (r1 * PI) - (PI / 2.0);
+
+            // Random speed
+            float strength = POP_STRENGTH * (0.8 + (r2 * 2)); // 80% to 280% strength
+
+            // Apply all to vel
+            newVelocity = vec2(cos(angle), -abs(sin(angle))) * strength;
+        } else {
+            // Standard bounce logic if it still has speed
+            newPosition.y = 1.0;
+            newVelocity.y = -newVelocity.y * AIR_RESIST;
+        }
+    }
+
+    particlesOut[index].position = newPosition;
+    particlesOut[index].velocity = newVelocity;
+    particlesOut[index].color = particleIn.color;
+
+}

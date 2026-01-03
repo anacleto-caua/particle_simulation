@@ -9,6 +9,11 @@ struct UniformBufferObject {
     float deltaTime = 1.0f;
 };
 
+struct rngUbo {
+    float value = 0;
+};
+
+
 struct Particle {
     glm::vec2 position;
     glm::vec2 velocity;

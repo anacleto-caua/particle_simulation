@@ -93,6 +93,8 @@ class ParticleSimulation {
     
     std::vector<std::unique_ptr<GpuBuffer>> m_uniformBuffers;
     std::vector<std::unique_ptr<GpuBuffer>> m_shaderStorageBuffers;
+
+    std::vector<std::unique_ptr<GpuBuffer>> m_rngUbo;
     
     uint32_t mipLevels;
 
@@ -123,6 +125,9 @@ class ParticleSimulation {
     double lastFrameTime = 0.0f;
     double lastTime = 0.0f;
 
+    std::mt19937 rngEngine{};
+    std::uniform_real_distribution<float> rngDist{};
+
     void initWindow() {
         m_windowCtx = std::make_unique<GlfwWindowContext>(
             WIDTH, HEIGHT, 
@@ -139,7 +144,8 @@ class ParticleSimulation {
     }
 
     void initVulkan() {
-        
+        createRngEngine();
+
         createInstance();
         setupDebugMessenger();
   
@@ -164,7 +170,7 @@ class ParticleSimulation {
         createUniformBuffers();
 
         createShaderStorageBuffers();
-        initiliazeParticles();
+        initialiazeParticles();
 
         createDescriptorPool();
         createDescriptorSets();
@@ -201,6 +207,7 @@ class ParticleSimulation {
        
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             m_uniformBuffers[i].reset();
+            m_rngUbo[i].reset();
         }
 
         m_deviceCtx.reset();
@@ -212,6 +219,15 @@ class ParticleSimulation {
         
         vkDestroyInstance(instance, nullptr);
         m_windowCtx.reset();
+    }
+
+    void createRngEngine() {
+        rngEngine.seed((unsigned)time(nullptr));
+        rngDist = std::uniform_real_distribution<float>(0.0f, 1.0f);
+    }
+
+    float getRandomFloat() {
+        return rngDist(rngEngine);
     }
 
     void createInstance() {
@@ -595,7 +611,7 @@ class ParticleSimulation {
     }
 
     void createDescriptorSetLayout() {
-        std::array<VkDescriptorSetLayoutBinding, 3> layoutBindings{};
+        std::array<VkDescriptorSetLayoutBinding, 4> layoutBindings{};
         layoutBindings[0].binding = 0;
         layoutBindings[0].descriptorCount = 1;
         layoutBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -614,9 +630,15 @@ class ParticleSimulation {
         layoutBindings[2].pImmutableSamplers = nullptr;
         layoutBindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
+        layoutBindings[3].binding = 3;
+        layoutBindings[3].descriptorCount = 1;
+        layoutBindings[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        layoutBindings[3].pImmutableSamplers = nullptr;
+        layoutBindings[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.bindingCount = 3;
+        layoutInfo.bindingCount = layoutBindings.size();
         layoutInfo.pBindings = layoutBindings.data();
 
         if (vkCreateDescriptorSetLayout(m_deviceCtx->m_logicalDevice, &layoutInfo, nullptr, &m_computeDescriptorSetLayout) != VK_SUCCESS) {
@@ -685,7 +707,8 @@ class ParticleSimulation {
                 m_deviceCtx->m_logicalDevice,
                 VK_SHADER_STAGE_COMPUTE_BIT,
                 // "shaders/shader.comp.spv"
-                "shaders/gravity.comp.spv"
+                // "shaders/gravity.comp.spv"
+                "shaders/popcorn.comp.spv"
             );
 
         if (vkCreateComputePipelines(m_deviceCtx->m_logicalDevice, VK_NULL_HANDLE, 1, &computePipelineInfo, nullptr, &m_computePipeline) != VK_SUCCESS) {
@@ -960,9 +983,11 @@ class ParticleSimulation {
 
     void createUniformBuffers() {
         VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+        VkDeviceSize rngBufferSize = sizeof(rngUbo);
 
         m_uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-
+        m_rngUbo.resize(MAX_FRAMES_IN_FLIGHT);
+        
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             m_uniformBuffers[i] = std::make_unique<GpuBuffer>(
                 *m_deviceCtx,
@@ -970,6 +995,14 @@ class ParticleSimulation {
                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                 m_deviceCtx->m_graphicsQueueCtx
+            );
+
+            m_rngUbo[i] = std::make_unique<GpuBuffer>(
+                *m_deviceCtx,
+                rngBufferSize,
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                m_deviceCtx->m_computeQueueCtx
             );
         }
     }
@@ -987,19 +1020,16 @@ class ParticleSimulation {
         }
     }
 
-    void initiliazeParticles() {
-        std::default_random_engine rngEngine((unsigned)time(nullptr));
-        std::uniform_real_distribution<float> rngDist(0.0f, 1.0f);
-
+    void initialiazeParticles() {
         std::vector<Particle> particles(PARTICLE_COUNT);
         for (auto& particle : particles) {
             // Random position
-            float x = (rngDist(rngEngine) * 2.0f) - 1.0f;
-            float y = (rngDist(rngEngine) * 2.0f) - 1.0f;
+            float x = (getRandomFloat() * 2.0f) - 1.0f;
+            float y = (getRandomFloat() * 2.0f) - 1.0f;
             particle.position = glm::vec2(x, y);
                 
             // Random angle for direction
-            float theta = rngDist(rngEngine) * 2.0f * 3.14159265f;
+            float theta = getRandomFloat() * 2.0f * 3.14159265f;
             
             // Calculate velocity independent of position
             float velX = cos(theta);
@@ -1009,7 +1039,7 @@ class ParticleSimulation {
             particle.velocity = glm::normalize(glm::vec2(velX, velY)) * 0.0025f;
 
             // Random color :b
-            particle.color = glm::vec4(rngDist(rngEngine), rngDist(rngEngine), rngDist(rngEngine), 1.0f);
+            particle.color = glm::vec4(getRandomFloat(), getRandomFloat(), getRandomFloat(), 1.0f);
         }
 
         VkDeviceSize totalDataSize = sizeof(Particle) * PARTICLE_COUNT;
@@ -1019,11 +1049,13 @@ class ParticleSimulation {
     }
 
     void createDescriptorPool() {
-        std::array<VkDescriptorPoolSize, 2> poolSizes{};
+        std::array<VkDescriptorPoolSize, 3> poolSizes{};
         poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
         poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 2;
+        poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
         VkDescriptorPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1070,6 +1102,11 @@ class ParticleSimulation {
                 1
             );
 
+            writer.addUniformBufferBinding(
+                m_computeDescriptorSets[i],
+                3,  *m_rngUbo[i]
+            );
+
             writer.writeAll(m_deviceCtx->m_logicalDevice);
         }
     }
@@ -1077,7 +1114,7 @@ class ParticleSimulation {
     void drawFrame() {
         // Compute submission
         vkWaitForFences(m_deviceCtx->m_logicalDevice, 1, &m_computeInFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
-        updateUniformBuffer(currentFrame);
+        updateUniformBuffers(currentFrame);
 
         vkResetFences(m_deviceCtx->m_logicalDevice, 1, &m_computeInFlightFences[currentFrame]);
         
@@ -1161,11 +1198,15 @@ class ParticleSimulation {
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
-    void updateUniformBuffer(uint32_t index) {
+    void updateUniformBuffers(uint32_t index) {
         UniformBufferObject ubo{};
         ubo.deltaTime = 0.2f;
 
+        rngUbo rngUbo{};
+        rngUbo.value = getRandomFloat();
+
         m_uniformBuffers[index]->mapAndWrite(&ubo, sizeof(ubo));
+        m_rngUbo[index]->mapAndWrite(&rngUbo, sizeof(rngUbo));
     }
 
     void mainLoop() {
